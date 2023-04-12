@@ -1,0 +1,46 @@
+.TH "stats_record" 3 "Wed Apr 5 2023" "TSN Switch ousing AF_XDP" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+stats_record
+.SH SYNOPSIS
+.br
+.PP
+.SS "Public Attributes"
+
+.in +1c
+.ti -1c
+.RI "uint64_t \fBtimestamp\fP"
+.br
+.ti -1c
+.RI "uint64_t \fBrx_packets\fP"
+.br
+.ti -1c
+.RI "uint64_t \fBrx_bytes\fP"
+.br
+.ti -1c
+.RI "uint64_t \fBtx_packets\fP"
+.br
+.ti -1c
+.RI "uint64_t \fBtx_bytes\fP"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+\fBstats_record\fP: (Example structure to store recors of status of the AF_XDP (SENT/RECEIVED) 
+.SH "Member Data Documentation"
+.PP 
+.SS "uint64_t stats_record::rx_bytes"
+bytes received 
+.br
+ 
+.SS "uint64_t stats_record::rx_packets"
+packets received 
+.SS "uint64_t stats_record::tx_bytes"
+bytes sent 
+.SS "uint64_t stats_record::tx_packets"
+packets sent 
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for TSN Switch ousing AF_XDP from the source code\&.

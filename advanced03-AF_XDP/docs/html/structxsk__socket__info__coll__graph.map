@@ -1,0 +1,5 @@
+<map id="xsk_socket_info" name="xsk_socket_info">
+<area shape="rect" id="node1" title="xsk_socket_info: (STRUCTURE to store the actual data and conf of the socket itself) This is NOT the a..." alt="" coords="75,108,201,133"/>
+<area shape="rect" id="node2" href="$structxsk__umem__info.html" title="xsk_umem_info: (STRUCTURE UMEMORY) User Mode Memory, which is a memory region that is managed by user..." alt="" coords="5,5,132,31"/>
+<area shape="rect" id="node3" href="$structstats__record.html" title="stats_record: (Example structure to store recors of status of the AF_XDP (SENT/RECEIVED)" alt="" coords="156,5,259,31"/>
+</map>

@@ -1,0 +1,80 @@
+.TH "xsk_socket_info" 3 "Wed Apr 5 2023" "TSN Switch ousing AF_XDP" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+xsk_socket_info
+.SH SYNOPSIS
+.br
+.PP
+.SS "Public Attributes"
+
+.in +1c
+.ti -1c
+.RI "struct xsk_ring_cons \fBrx\fP"
+.br
+.ti -1c
+.RI "struct xsk_ring_prod \fBtx\fP"
+.br
+.ti -1c
+.RI "struct \fBxsk_umem_info\fP * \fBumem\fP"
+.br
+.ti -1c
+.RI "struct xsk_socket * \fBxsk\fP"
+.br
+.ti -1c
+.RI "uint64_t \fBumem_frame_addr\fP [NUM_FRAMES]"
+.br
+.ti -1c
+.RI "uint32_t \fBumem_frame_free\fP"
+.br
+.ti -1c
+.RI "uint32_t \fBoutstanding_tx\fP"
+.br
+.ti -1c
+.RI "struct \fBstats_record\fP \fBstats\fP"
+.br
+.ti -1c
+.RI "struct \fBstats_record\fP \fBprev_stats\fP"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+\fBxsk_socket_info\fP: (STRUCTURE to store the actual data and conf of the socket itself) This is NOT the actual socket (xsk_socket() is), but it relations directly to the umem and the socket\&. its optional but recomended to also store records 
+.SH "Member Data Documentation"
+.PP 
+.SS "uint32_t xsk_socket_info::outstanding_tx"
+? 
+.br
+ 
+.SS "struct \fBstats_record\fP xsk_socket_info::prev_stats"
+producer previous stats 
+.SS "struct xsk_ring_cons xsk_socket_info::rx"
+consumer ring (for rx) 
+.br
+ 
+.SS "struct \fBstats_record\fP xsk_socket_info::stats"
+actual stats (this iteration) 
+.br
+ 
+.SS "struct xsk_ring_prod xsk_socket_info::tx"
+producer ring (fot tx) 
+.SS "struct \fBxsk_umem_info\fP* xsk_socket_info::umem"
+pointer to umem_info 
+.br
+ 
+.SS "uint64_t xsk_socket_info::umem_frame_addr[NUM_FRAMES]"
+list of addr 
+.br
+ 
+.SS "uint32_t xsk_socket_info::umem_frame_free"
+free frames 
+.br
+ 
+.SS "struct xsk_socket* xsk_socket_info::xsk"
+pointer to socket (used to call actions) 
+.br
+ 
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for TSN Switch ousing AF_XDP from the source code\&.

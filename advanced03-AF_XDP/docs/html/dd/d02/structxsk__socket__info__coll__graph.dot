@@ -1,0 +1,12 @@
+digraph "xsk_socket_info"
+{
+ // LATEX_PDF_SIZE
+  bgcolor="transparent";
+  edge [fontname=Helvetica,fontsize=10,labelfontname=Helvetica,labelfontsize=10];
+  node [fontname=Helvetica,fontsize=10,shape=box,height=0.2,width=0.4];
+  Node1 [label="xsk_socket_info",height=0.2,width=0.4,color="gray40", fillcolor="grey60", style="filled", fontcolor="black",tooltip=" "];
+  Node2 -> Node1 [dir="back",color="darkorchid3",style="dashed",label=" umem",fontcolor="grey" ];
+  Node2 [label="xsk_umem_info",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$dc/d62/structxsk__umem__info.html",tooltip=" "];
+  Node3 -> Node1 [dir="back",color="darkorchid3",style="dashed",label=" prev_stats\nstats",fontcolor="grey" ];
+  Node3 [label="stats_record",height=0.2,width=0.4,color="gray40", fillcolor="white", style="filled",URL="$dd/d38/structstats__record.html",tooltip=" "];
+}

@@ -1,0 +1,49 @@
+.TH "xsk_umem_info" 3 "Wed Apr 5 2023" "TSN Switch ousing AF_XDP" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+xsk_umem_info
+.SH SYNOPSIS
+.br
+.PP
+.SS "Public Attributes"
+
+.in +1c
+.ti -1c
+.RI "struct xsk_ring_prod \fBfq\fP"
+.br
+.ti -1c
+.RI "struct xsk_ring_cons \fBcq\fP"
+.br
+.ti -1c
+.RI "struct xsk_umem * \fBumem\fP"
+.br
+.ti -1c
+.RI "void * \fBbuffer\fP"
+.br
+.in -1c
+.SH "Detailed Description"
+.PP 
+\fBxsk_umem_info\fP: (STRUCTURE UMEMORY User Mode Memory, which is a memory region that is managed by user space applications rather than the kernel\&. Allows to manage/store stuff from kernel and access from user\&. 
+.SH "Member Data Documentation"
+.PP 
+.SS "void* xsk_umem_info::buffer"
+buffer for storage before sent to umem 
+.br
+ 
+.SS "struct xsk_ring_cons xsk_umem_info::cq"
+consumer ring 
+.br
+ 
+.SS "struct xsk_ring_prod xsk_umem_info::fq"
+producer ring 
+.br
+ 
+.SS "struct xsk_umem* xsk_umem_info::umem"
+umem pointer to locate 
+.br
+ 
+
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for TSN Switch ousing AF_XDP from the source code\&.
