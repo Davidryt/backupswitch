@@ -377,7 +377,7 @@ static inline void csum_replace2(__sum16 *sum, __be16 old, __be16 new)
 static bool process_packet(struct xsk_socket_info *xsk,
 			   uint64_t addr, uint32_t len)
 {
-	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
+	//uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
        
 
@@ -614,7 +614,9 @@ int main(int argc, char **argv)
 	int ret;
 	int xsks_map_fd;
 	void *packet_buffer;
+	void *packet_buffer2;  //test
 	uint64_t packet_buffer_size;
+	uint64_t packet_buffer_size2;  //test
 	struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
 	struct config cfg = {   //Temporal
 		.ifindex   = -1,
@@ -622,22 +624,23 @@ int main(int argc, char **argv)
 		.filename = "",
 		.progsec = "xdp_sock"
 	};
-	struct config cfg1 = {
+	struct config left = {
+		.ifindex   = 3,
+		.do_unload = false,
+		.filename = "",
+		.progsec = "xdp_sock"
+	};
+	struct config right = {
 		.ifindex   = 4,
 		.do_unload = false,
 		.filename = "",
 		.progsec = "xdp_sock"
 	};
-	struct config cfg2 = {
-		.ifindex   = 5,
-		.do_unload = false,
-		.filename = "",
-		.progsec = "xdp_sock"
-	};
 	struct xsk_umem_info *umem;
+	struct xsk_umem_info *umem2; //test
 	struct xsk_socket_info *xsk_socket;//temporal
-	struct xsk_socket_info *xsk_socket1;
-	struct xsk_socket_info *xsk_socket2;
+	struct xsk_socket_info *left_socket;
+	struct xsk_socket_info *right_socket;
 	struct bpf_object *bpf_obj = NULL;
 	pthread_t stats_poll_thread;
 
@@ -646,15 +649,15 @@ int main(int argc, char **argv)
 
 	/** Cmdline options can change progsec */
 	parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
-	//printf(cfg.ifindex);
-	//exit(0);
+	
 	/** Required option */
 	if (cfg.ifindex == -1) {
 		fprintf(stderr, "ERROR: Required option --dev missing\n\n");
 		usage(argv[0], __doc__, long_options, (argc == 1));
 		return EXIT_FAIL_OPTION;
 	}
-	else{ printf("%d valor",cfg.ifindex);}
+	printf("%d  interfaz", right.ifindex);
+	
 	/** Unload XDP program if requested */
 	if (cfg.do_unload)
 		return xdp_link_detach(cfg.ifindex, cfg.xdp_flags, 0);
@@ -678,7 +681,6 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 	}
-
 	/** 
 	 * @internal 
 	 * Allow unlimited locking of memory, so all memory needed for packet
@@ -700,6 +702,23 @@ int main(int argc, char **argv)
 			strerror(errno));
 		exit(EXIT_FAILURE);
 	}
+	
+	
+	/*
+	
+	packet_buffer_size2 = NUM_FRAMES * FRAME_SIZE;
+	if (posix_memalign(&packet_buffer2,
+			   getpagesize(), 
+			   packet_buffer_size2)) {
+		fprintf(stderr, "ERROR: Can't allocate buffer memory \"%s\"\n",
+			strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	
+	
+	*/
+	
+	
 
 	/** Initialize shared packet_buffer for umem usage */
 	umem = configure_xsk_umem(packet_buffer, packet_buffer_size);
@@ -708,31 +727,38 @@ int main(int argc, char **argv)
 			strerror(errno));
 		exit(EXIT_FAILURE);
 	}
-
-	/** Open and configure the AF_XDP (xsk) socket */
-	/*xsk_socket = xsk_configure_socket(&cfg, umem);
-	if (xsk_socket == NULL) {
-		fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
+	
+	/*umem2 = configure_xsk_umem(packet_buffer2, packet_buffer_size2);
+	if (umem2 == NULL) {
+		fprintf(stderr, "ERROR: Can't create umem2 \"%s\"\n",
 			strerror(errno));
 		exit(EXIT_FAILURE);
 	}*/
-	xsk_socket1 = xsk_configure_socket(&cfg1, umem);
-	xsk_socket2 = xsk_configure_socket(&cfg2, umem);
-	if (xsk_socket1 == NULL) {
-		fprintf(stderr, "ERROR: Can't setup AF_XDP socket 1\"%s\"\n",
+
+	/** Open and configure the AF_XDP (xsk) socket */
+	xsk_socket = xsk_configure_socket(&cfg, umem);
+	if (xsk_socket == NULL) {
+		fprintf(stderr, "ERROR: Can't setup AF_XDP socket input \"%s\"\n",
 			strerror(errno));
 		exit(EXIT_FAILURE);
 	}
-	if (xsk_socket2 == NULL) {
-		fprintf(stderr, "ERROR: Can't setup AF_XDP socket 2 \"%s\"\n",
+	
+	//left_socket = xsk_configure_socket(&left, umem);
+	/*if (left_socket == NULL) {
+		fprintf(stderr, "ERROR: Can't setup AF_XDP socket 1\"%s\"\n",
 			strerror(errno));
 		exit(EXIT_FAILURE);
 	}*/
-
+	right_socket = xsk_configure_socket(&right, umem);
+	if (right_socket == NULL) {
+		fprintf(stderr, "ERROR: Can't setup AF_XDP socket 2 \"%s\"\n",
+			strerror(errno));
+		exit(EXIT_FAILURE);
+	}
 	/** Start thread to do statistics display */
 	if (verbose) {
 		ret = pthread_create(&stats_poll_thread, NULL, stats_poll,
-				     xsk_socket);
+				     xsk_socket);  //CAMBIAR
 		if (ret) {
 			fprintf(stderr, "ERROR: Failed creating statistics thread "
 				"\"%s\"\n", strerror(errno));
@@ -742,10 +768,15 @@ int main(int argc, char **argv)
 
 	/** Receive and count packets than drop them */
 	rx_and_process(&cfg, xsk_socket);
+	//rx_and_process(&cfg, left_socket);
+	//rx_and_process(&cfg, right_socket);
 
 	/** Cleanup */
 	xsk_socket__delete(xsk_socket->xsk);
+	//xsk_socket__delete(left_socket->xsk);
+	//xsk_socket__delete(right_socket->xsk);
 	xsk_umem__delete(umem->umem);
+	//xsk_umem__delete(umem2->umem);
 	xdp_link_detach(cfg.ifindex, cfg.xdp_flags, 0);
 
 	return EXIT_OK;
