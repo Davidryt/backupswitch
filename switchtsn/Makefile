@@ -2,7 +2,7 @@
 
 
 XDP_TARGETS  := af_xdp_kern_david
-USER_TARGETS := af_xdp_david_shared 
+USER_TARGETS := af_xdp_user 
 
 LIBBPF_DIR = ../libbpf/src/
 COMMON_DIR = ../common/

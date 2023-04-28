@@ -7,6 +7,8 @@
 #include <linux/udp.h> 
 #include <linux/in.h> 
 #include <stdint.h>
+#include <stdio.h>
+#include <stdbool.h>
 
 /*
 // The parsing helper functions from the packet01 lesson have moved here
@@ -45,13 +47,14 @@ struct bpf_map_def SEC("maps") qidconf_map = {
 	.max_entries = 1,
 };*/
 
-SEC("xdp,xdp") 
+SEC("xdp_sock") 
 int xdp_vxlan_redirect(struct xdp_md *ctx) 
 { 
 	int *qidconf, index = ctx->rx_queue_index; 
 	
 	// A set entry here means that the correspnding queue_id has an active AF_XDP socket bound to it. 
 	qidconf = bpf_map_lookup_elem(&qidconf_map, &index); 
+	//qidconf=false;
 	if (qidconf) 
 	{ 
 		void *data = (void*)(long)ctx->data; 
@@ -61,22 +64,22 @@ int xdp_vxlan_redirect(struct xdp_md *ctx)
 		__u16 h_proto = eth->h_proto; 
 		if ((void*)eth + sizeof(*eth) <= data_end) { 
 			if (h_proto == bpf_htons(ETH_P_IP)){ 
-				struct iphdr *ip = data + sizeof(*eth); 
+				/*struct iphdr *ip = data + sizeof(*eth); 
 				if ((void*)ip + sizeof(*ip) <= data_end) { 
 					if (ip->protocol == IPPROTO_UDP){ 
 						struct udphdr *udp = data + sizeof(*eth) + sizeof(*ip); 
 						if ((void*)udp + sizeof(*udp) <= data_end){ 
-							if (udp->dest == bpf_htons(8472)){ 
-								return bpf_redirect_map(&xsks_map, index, 0); 
+							if (udp->dest == bpf_htons(8472)){ */
+								return bpf_redirect_map(&xsks_map, 11, 0); 
 				
-							}
+							/*}
 						}
 					}
-				}
+				}*/
 			}
 		}
 	}			
-	return XDP_PASS; 			
+	return XDP_DROP; 			
 } 
 /*
 SEC("xdp_sock")
