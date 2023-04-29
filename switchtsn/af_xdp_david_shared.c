@@ -622,21 +622,21 @@ int main(int argc, char **argv)
 		.filename = "",
 		.progsec = "xdp_sock"
 	};
-	struct config left = {
-		.ifindex   = 5,
+	/*struct config left = {
+		.ifindex   = 10,
 		.do_unload = false,
 		.filename = "",
 		.progsec = "xdp_sock"
-	};
+	};*/
 	struct config right = {
-		.ifindex   = 6,
+		.ifindex   = 11,
 		.do_unload = false,
 		.filename = "",
 		.progsec = "xdp_sock"
 	};
 	struct xsk_umem_info *umem;
 	struct xsk_socket_info *xsk_socket;//temporal
-	struct xsk_socket_info *left_socket;
+	//struct xsk_socket_info *left_socket;
 	struct xsk_socket_info *right_socket;
 	struct bpf_object *bpf_obj = NULL;
 	pthread_t stats_poll_thread;
