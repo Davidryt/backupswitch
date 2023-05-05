@@ -47,7 +47,14 @@ struct bpf_map_def SEC("maps") qidconf_map = {
 	.max_entries = 1,
 };*/
 
-SEC("xdp_sock") 
+struct bpf_map_def SEC("maps") xdp_stats_map = {
+	.type        = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size    = sizeof(int),
+	.value_size  = sizeof(__u32),
+	.max_entries = 64,
+};
+
+/*SEC("xdp_sock") 
 int xdp_vxlan_redirect(struct xdp_md *ctx) 
 { 
 	int *qidconf, index = ctx->rx_queue_index; 
@@ -64,24 +71,24 @@ int xdp_vxlan_redirect(struct xdp_md *ctx)
 		__u16 h_proto = eth->h_proto; 
 		if ((void*)eth + sizeof(*eth) <= data_end) { 
 			if (h_proto == bpf_htons(ETH_P_IP)){ 
-				/*struct iphdr *ip = data + sizeof(*eth); 
+				struct iphdr *ip = data + sizeof(*eth); 
 				if ((void*)ip + sizeof(*ip) <= data_end) { 
 					if (ip->protocol == IPPROTO_UDP){ 
 						struct udphdr *udp = data + sizeof(*eth) + sizeof(*ip); 
 						if ((void*)udp + sizeof(*udp) <= data_end){ 
-							if (udp->dest == bpf_htons(8472)){ */
-								return bpf_redirect_map(&xsks_map, 11, 0); 
+							if (udp->dest == bpf_htons(8472)){ 
+								return bpf_redirect_map(&xsks_map, index, 0); 
 				
-							/*}
+							}
 						}
 					}
-				}*/
+				}
 			}
 		}
 	}			
 	return XDP_DROP; 			
-} 
-/*
+} */
+
 SEC("xdp_sock")
 int xdp_sock_prog(struct xdp_md *ctx)
 {
@@ -103,7 +110,7 @@ int xdp_sock_prog(struct xdp_md *ctx)
 
     return XDP_PASS;
 }
-*/
+
 
 /*SEC("xdp_sock")
 int xdp_redirect_func(struct xdp_md *ctx)
