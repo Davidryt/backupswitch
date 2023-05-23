@@ -68,10 +68,10 @@ func main() {
 		log.Fatalf("failed to fetch info about link %s: %v", outLinkName, err)
 	}
 
-	forwardL2(verbose, inLink, inLinkQueueID, inLinkDst, outLink, outLinkQueueID, outLinkDst)
+	launchswitch(verbose, inLink, inLinkQueueID, inLinkDst, outLink, outLinkQueueID, outLinkDst)
 }
 
-func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDst net.HardwareAddr, outLink netlink.Link, outLinkQueueID int, outLinkDst net.HardwareAddr) {
+func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDst net.HardwareAddr, outLink netlink.Link, outLinkQueueID int, outLinkDst net.HardwareAddr) {
 	//HERE WE DO INTERFACE 1
 	
 	log.Printf("attaching XDP program for %s...", inLink.Attrs().Name)
