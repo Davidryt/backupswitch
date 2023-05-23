@@ -75,7 +75,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDs
 	//HERE WE DO INTERFACE 1
 	
 	log.Printf("attaching XDP program for %s...", inLink.Attrs().Name)
-	inProg, err := xdp.NewProgram(inLinkQueueID + 1)
+	inProg, err := xdp.NewProgram(inLinkQueueID + 20)
 	if err != nil {
 		log.Fatalf("failed to create xdp program: %v\n", err)
 	}
@@ -98,7 +98,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDs
 	//HERE WE DO INTERFACE 2
 	
 	log.Printf("attaching XDP program for %s...", outLink.Attrs().Name)
-	outProg, err := xdp.NewProgram(outLinkQueueID + 1)
+	outProg, err := xdp.NewProgram(outLinkQueueID + 20)
 	if err != nil {
 		log.Fatalf("failed to create xdp program: %v\n", err)
 	}
