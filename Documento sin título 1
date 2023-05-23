@@ -1,0 +1,10 @@
+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
+
+inputs importantes
+
+eval $(../testenv/testenv.sh alias)
+t st
+t setup -n left
+t setup -n right
+ip link show
+
