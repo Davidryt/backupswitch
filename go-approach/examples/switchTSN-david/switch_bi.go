@@ -34,12 +34,13 @@ func main() {
 	}
 	flag.StringVar(&inLinkName, "inlink", "", "Input network link name.")
 	flag.IntVar(&inLinkQueueID, "inlinkqueue", 0, "The queue ID to attach to on input link.")
-	flag.StringVar(&inLinkDstStr, "inlinkdst", "8e:67:5c:7d:4d:6d", "Destination MAC address to forward frames to from 'in' interface.")
+	flag.StringVar(&inLinkDstStr, "inlinkdst", "ff:ff:ff:ff:ff:ff", "Destination MAC address to forward frames to from 'in' interface.")
 	flag.StringVar(&outLinkName, "outlink", "", "Output network link name.")
 	flag.IntVar(&outLinkQueueID, "outlinkqueue", 0, "The queue ID to attach to on output link.")
-	flag.StringVar(&outLinkDstStr, "outlinkdst", "7e:f4:31:9b:dc:aa", "Destination MAC address to forward frames to from 'out' interface.")
+	flag.StringVar(&outLinkDstStr, "outlinkdst", "ff:ff:ff:ff:ff:ff", "Destination MAC address to forward frames to from 'out' interface.")
 	flag.BoolVar(&verbose, "verbose", false, "Output forwarding statistics.")
 	flag.Parse()
+
 
 	if inLinkName == "" || outLinkName == "" {
 		flag.Usage()
@@ -266,7 +267,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDs
 
 func forwardFrames(input *xdp.Socket, output *xdp.Socket, dstMac net.HardwareAddr) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
-	replaceDstMac(input, inDescs, dstMac)
+	//replaceDstMac(input, inDescs, dstMac)
 
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 
