@@ -59,7 +59,7 @@ attributes #3 = { nounwind }
 
 !0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
 !1 = distinct !DIGlobalVariable(name: "xsks_map", scope: !2, file: !3, line: 15, type: !17, isLocal: false, isDefinition: true)
-!2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "Ubuntu clang version 14.0.0-1ubuntu1", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !14, splitDebugInlining: false, nameTableKind: None)
+!2 = distinct !DICompileUnit(language: DW_LANG_C99, file: !3, producer: "Ubuntu clang version 14.0.0-1ubuntu1.1", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !4, globals: !14, splitDebugInlining: false, nameTableKind: None)
 !3 = !DIFile(filename: "ebpf.c", directory: "/home/david-switch/Escritorio/backupswitch/go-approach/examples/switchTSN-david", checksumkind: CSK_MD5, checksum: "ba59a39ca07c5eda42d3c074bf157f77")
 !4 = !{!5}
 !5 = !DICompositeType(tag: DW_TAG_enumeration_type, name: "xdp_action", file: !6, line: 5431, baseType: !7, size: 32, elements: !8)
@@ -178,7 +178,7 @@ attributes #3 = { nounwind }
 !118 = !{i32 2, !"Debug Info Version", i32 3}
 !119 = !{i32 1, !"wchar_size", i32 4}
 !120 = !{i32 7, !"frame-pointer", i32 2}
-!121 = !{!"Ubuntu clang version 14.0.0-1ubuntu1"}
+!121 = !{!"Ubuntu clang version 14.0.0-1ubuntu1.1"}
 !122 = distinct !DISubprogram(name: "xdp_redirect", scope: !3, file: !3, line: 30, type: !123, scopeLine: 31, flags: DIFlagPrototyped | DIFlagAllCallsDescribed, spFlags: DISPFlagDefinition | DISPFlagOptimized, unit: !2, retainedNodes: !134)
 !123 = !DISubroutineType(types: !124)
 !124 = !{!41, !125}

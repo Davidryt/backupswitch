@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"syscall"
 	"time"
@@ -21,10 +20,8 @@ import (
 
 func main() {
 	var inLinkName string
-	var inLinkDstStr string
 	var inLinkQueueID int
 	var outLinkName string
-	var outLinkDstStr string
 	var outLinkQueueID int
 	var verbose bool
 
@@ -34,10 +31,8 @@ func main() {
 	}
 	flag.StringVar(&inLinkName, "inlink", "", "Input network link name.")
 	flag.IntVar(&inLinkQueueID, "inlinkqueue", 0, "The queue ID to attach to on input link.")
-	flag.StringVar(&inLinkDstStr, "inlinkdst", "ff:ff:ff:ff:ff:ff", "Destination MAC address to forward frames to from 'in' interface.")
 	flag.StringVar(&outLinkName, "outlink", "", "Output network link name.")
 	flag.IntVar(&outLinkQueueID, "outlinkqueue", 0, "The queue ID to attach to on output link.")
-	flag.StringVar(&outLinkDstStr, "outlinkdst", "ff:ff:ff:ff:ff:ff", "Destination MAC address to forward frames to from 'out' interface.")
 	flag.BoolVar(&verbose, "verbose", false, "Output forwarding statistics.")
 	flag.Parse()
 
@@ -46,19 +41,7 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-
-	inLinkDst, err := net.ParseMAC(inLinkDstStr)
-	if err != nil {
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	outLinkDst, err := net.ParseMAC(outLinkDstStr)
-	if err != nil {
-		flag.Usage()
-		os.Exit(1)
-	}
-
+	
 	inLink, err := netlink.LinkByName(inLinkName)
 	if err != nil {
 		log.Fatalf("failed to fetch info about link %s: %v", inLinkName, err)
@@ -69,10 +52,10 @@ func main() {
 		log.Fatalf("failed to fetch info about link %s: %v", outLinkName, err)
 	}
 
-	launchswitch(verbose, inLink, inLinkQueueID, inLinkDst, outLink, outLinkQueueID, outLinkDst)
+	launchswitch(verbose, inLink, inLinkQueueID, outLink, outLinkQueueID)
 }
 
-func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDst net.HardwareAddr, outLink netlink.Link, outLinkQueueID int, outLinkDst net.HardwareAddr) {
+func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink netlink.Link, outLinkQueueID int) {
 	//HERE WE DO INTERFACE 1
 
 	/*log.Printf("attaching XDP program for %s...", inLink.Attrs().Name)
@@ -178,7 +161,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDs
 			}
 			
 			if (fds[0].Revents & unix.POLLIN) != 0 {
-				numBytes, numFrames := forwardFrames(inXsk, outXsk, outLinkDst)
+				numBytes, numFrames := forwardFrames(inXsk, outXsk)
 				numBytesTotal += numBytes
 				numFramesTotal += numFrames
 			}
@@ -188,7 +171,6 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDs
    		}
 	}()
 	
-	//go func() {
    		for {
 			outXsk.Fill(outXsk.GetDescs(outXsk.NumFreeFillSlots(), true))
 			fds[1].Fd = int32(outXsk.FD())
@@ -210,7 +192,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDs
 			}
 
 			if (fds[1].Revents & unix.POLLIN) != 0 {
-				numBytes, numFrames := forwardFrames(outXsk, inXsk, inLinkDst)
+				numBytes, numFrames := forwardFrames(outXsk, inXsk)
 				numBytesTotal += numBytes
 				numFramesTotal += numFrames
 			}
@@ -218,57 +200,11 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDs
 				outXsk.Complete(outXsk.NumCompleted())
 			}
    		}
-	//}()
-
-	/*for {
-		fds[0].Fd = int32(inXsk.FD())
-		fds[1].Fd = int32(outXsk.FD())
 	
-	   	fds[0].Events = unix.POLLIN
-	   	if inXsk.NumTransmitted() > 0 {
-	   		fds[0].Events |= unix.POLLOUT
-	   	}
-
-	   	fds[1].Events = unix.POLLIN
-	   	if outXsk.NumTransmitted() > 0 {
-	   		fds[1].Events |= unix.POLLOUT
-	   	}
-	
-	   	fds[0].Revents = 0
-	   	fds[1].Revents = 0
-
- 	  	_, err := unix.Poll(fds[:], -1)
-		if err == syscall.EINTR {
-			// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
-			continue
-		} else if err != nil {
-			fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
-			os.Exit(1)
-		}
-
-		if (fds[0].Revents & unix.POLLIN) != 0 {
-			numBytes, numFrames := forwardFrames(inXsk, outXsk, inLinkDst)
-			numBytesTotal += numBytes
-			numFramesTotal += numFrames
-		}
-		if (fds[0].Revents & unix.POLLOUT) != 0 {
-			inXsk.Complete(inXsk.NumCompleted())
-		}
-		if (fds[1].Revents & unix.POLLIN) != 0 {
-			numBytes, numFrames := forwardFrames(outXsk, inXsk, outLinkDst)
-			numBytesTotal += numBytes
-			numFramesTotal += numFrames
-		}
-		if (fds[1].Revents & unix.POLLOUT) != 0 {
-			outXsk.Complete(outXsk.NumCompleted())
-		}
-	}*/
 }
 
-func forwardFrames(input *xdp.Socket, output *xdp.Socket, dstMac net.HardwareAddr) (numBytes uint64, numFrames uint64) {
+func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
-	//replaceDstMac(input, inDescs, dstMac)
-
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 
 	if len(inDescs) > len(outDescs) {
@@ -289,9 +225,3 @@ func forwardFrames(input *xdp.Socket, output *xdp.Socket, dstMac net.HardwareAdd
 	return
 }
 
-func replaceDstMac(xsk *xdp.Socket, descs []xdp.Desc, dstMac net.HardwareAddr) {
-	for _, d := range descs {
-		frame := xsk.GetFrame(d)
-		copy(frame, dstMac)
-	}
-}

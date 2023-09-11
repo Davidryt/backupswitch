@@ -317,7 +317,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, inLinkDs
 
 func forwardFrames(input *xdp.Socket, output *xdp.Socket, dstMac net.HardwareAddr) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
-	replaceDstMac(input, inDescs, dstMac)
+	//replaceDstMac(input, inDescs, dstMac)
 
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 
