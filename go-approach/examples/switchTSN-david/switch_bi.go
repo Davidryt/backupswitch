@@ -138,11 +138,13 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 	}
 
 	var fds [2]unix.PollFd
-	
+	fds[0].Fd = int32(inXsk.FD())
+	fds[1].Fd = int32(outXsk.FD())
 	go func() {
    		for {
+   			
       			inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
-      			fds[0].Fd = int32(inXsk.FD())
+      			
       			
       			fds[0].Events = unix.POLLIN
       			
@@ -171,35 +173,35 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
    		}
 	}()
 	
-   		for {
-			outXsk.Fill(outXsk.GetDescs(outXsk.NumFreeFillSlots(), true))
-			fds[1].Fd = int32(outXsk.FD())
-			
-			fds[1].Events = unix.POLLIN
-		   	if outXsk.NumTransmitted() > 0 {
-		   		fds[1].Events |= unix.POLLOUT
-		   	}
+   	for {
+		outXsk.Fill(outXsk.GetDescs(outXsk.NumFreeFillSlots(), true))
 		
-		   	fds[1].Revents = 0
+		
+		fds[1].Events = unix.POLLIN
+	   	if outXsk.NumTransmitted() > 0 {
+	   		fds[1].Events |= unix.POLLOUT
+	   	}
+	
+	   	fds[1].Revents = 0
 
-	 	  	_, err := unix.Poll(fds[:], -1)
-			if err == syscall.EINTR {
-				// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
-				continue
-			} else if err != nil {
-				fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
-				os.Exit(1)
-			}
+ 	  	_, err := unix.Poll(fds[:], -1)
+		if err == syscall.EINTR {
+			// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
+			continue
+		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
+			os.Exit(1)
+		}
 
-			if (fds[1].Revents & unix.POLLIN) != 0 {
-				numBytes, numFrames := forwardFrames(outXsk, inXsk)
-				numBytesTotal += numBytes
-				numFramesTotal += numFrames
-			}
-			if (fds[1].Revents & unix.POLLOUT) != 0 {
-				outXsk.Complete(outXsk.NumCompleted())
-			}
-   		}
+		if (fds[1].Revents & unix.POLLIN) != 0 {
+			numBytes, numFrames := forwardFrames(outXsk, inXsk)
+			numBytesTotal += numBytes
+			numFramesTotal += numFrames
+		}
+		if (fds[1].Revents & unix.POLLOUT) != 0 {
+			outXsk.Complete(outXsk.NumCompleted())
+		}
+   	}
 	
 }
 
