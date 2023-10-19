@@ -1,6 +1,5 @@
 /*
-
-*/
+ */
 package main
 
 import (
@@ -15,6 +14,10 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
+
+type packetQueue struct {
+	packets [][]byte
+}
 
 func main() {
 	var inLinkName string
@@ -34,12 +37,11 @@ func main() {
 	flag.BoolVar(&verbose, "verbose", false, "Output forwarding statistics.")
 	flag.Parse()
 
-
 	if inLinkName == "" || outLinkName == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
-	
+
 	inLink, err := netlink.LinkByName(inLinkName)
 	if err != nil {
 		log.Fatalf("failed to fetch info about link %s: %v", inLinkName, err)
@@ -116,6 +118,11 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 
 	log.Printf("starting TSN Switch...")
 
+	priorityQueue := packetQueue{}
+	normalQueue := packetQueue{}
+
+	log.Printf("Queues created...")
+
 	numBytesTotal := uint64(0)
 	numFramesTotal := uint64(0)
 	if verbose {
@@ -139,19 +146,18 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 	fds[0].Fd = int32(inXsk.FD())
 	fds[1].Fd = int32(outXsk.FD())
 	go func() {
-   		for {
-   			
-      			inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
-      			
-      			
-      			fds[0].Events = unix.POLLIN
-      			
-		   	if inXsk.NumTransmitted() > 0 {
-		   		fds[0].Events |= unix.POLLOUT
-		   	}
-		   	fds[0].Revents = 0
-		   	
-		   	_, err := unix.Poll(fds[:], -1)
+		for {
+
+			inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
+
+			fds[0].Events = unix.POLLIN
+
+			if inXsk.NumTransmitted() > 0 {
+				fds[0].Events |= unix.POLLOUT
+			}
+			fds[0].Revents = 0
+
+			_, err := unix.Poll(fds[:], -1)
 			if err == syscall.EINTR {
 				// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
 				continue
@@ -159,30 +165,58 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 				fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
 				os.Exit(1)
 			}
-			
+
+			// Process each descriptor and enqueue packets based on their priority.
+			for _, desc := range descs {
+				packet := desc[:desc.Len]
+				priority := getPacketPriority(packet)
+
+				// Enqueue the packet into the appropriate queue based on priority.
+				if priority == PriorityHigh {
+					priorityQueue.packets = append(priorityQueue.packets, packet)
+				} else {
+					normalQueue.packets = append(normalQueue.packets, packet)
+				}
+			}
+
 			if (fds[0].Revents & unix.POLLIN) != 0 {
+				//prio
+				if len(priorityQueue.packets) > 0 {
+					packet := priorityQueue.packets[0]
+					priorityQueue.packets = priorityQueue.packets[1:]
+					numBytes, numFrames = forwardPacket(packet, inXsk, outXsk)
+					numBytesTotal += numBytes
+					numFramesTotal += numFrames
+				} else if len(normalQueue.packets) > 0 {
+					packet := normalQueue.packets[0]
+					normalQueue.packets = normalQueue.packets[1:]
+					numBytes, numFrames = forwardPacket(packet, inXsk, outXsk)
+					numBytesTotal += numBytes
+					numFramesTotal += numFrames
+				}
+				/*old
 				numBytes, numFrames := forwardFrames(inXsk, outXsk)
 				numBytesTotal += numBytes
 				numFramesTotal += numFrames
+				*/
 			}
 			if (fds[0].Revents & unix.POLLOUT) != 0 {
 				inXsk.Complete(inXsk.NumCompleted())
 			}
-   		}
+		}
 	}()
-	
-   	for {
-		outXsk.Fill(outXsk.GetDescs(outXsk.NumFreeFillSlots(), true))
-		
-		
-		fds[1].Events = unix.POLLIN
-	   	if outXsk.NumTransmitted() > 0 {
-	   		fds[1].Events |= unix.POLLOUT
-	   	}
-	
-	   	fds[1].Revents = 0
 
- 	  	_, err := unix.Poll(fds[:], -1)
+	for {
+		outXsk.Fill(outXsk.GetDescs(outXsk.NumFreeFillSlots(), true))
+
+		fds[1].Events = unix.POLLIN
+		if outXsk.NumTransmitted() > 0 {
+			fds[1].Events |= unix.POLLOUT
+		}
+
+		fds[1].Revents = 0
+
+		_, err := unix.Poll(fds[:], -1)
 		if err == syscall.EINTR {
 			// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
 			continue
@@ -199,11 +233,11 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 		if (fds[1].Revents & unix.POLLOUT) != 0 {
 			outXsk.Complete(outXsk.NumCompleted())
 		}
-   	}
-	
+	}
+
 }
 
-func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
+func forwardPacket(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 
@@ -225,3 +259,8 @@ func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numF
 	return
 }
 
+func getPacketPriority(packet []byte) int {
+	// Implement your logic here to determine packet priority
+	// For simplicity, assume all packets have normal priority.
+	return PriorityNormal
+}
