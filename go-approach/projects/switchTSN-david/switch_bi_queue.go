@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"log"
@@ -11,8 +12,16 @@ import (
 	"time"
 
 	"github.com/asavie/xdp"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
+)
+
+const (
+	PriorityHigh   int = iota // 0
+	PriorityNormal            // 1
+	PriorityLow               // 2
 )
 
 type packetQueue struct {
@@ -117,7 +126,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 	defer outProg.Unregister(outLinkQueueID)
 
 	log.Printf("starting TSN Switch...")
-
+	//Two queues to store descriptors
 	priorityQueue := packetQueue{}
 	normalQueue := packetQueue{}
 
@@ -141,8 +150,8 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 			}
 		}()
 	}
-
-	var fds [2]unix.PollFd
+	//two struct of queues where I store FDs from in and out interfaces
+	var fds [2]unix.PollFd 
 	fds[0].Fd = int32(inXsk.FD())
 	fds[1].Fd = int32(outXsk.FD())
 	go func() {
@@ -225,10 +234,39 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 			os.Exit(1)
 		}
 
+		// Process each descriptor and enqueue packets based on their priority.
+		for _, desc := range descs {
+			packet := desc[:desc.Len]
+			priority := getPacketPriority(packet)
+
+			// Enqueue the packet into the appropriate queue based on priority.
+			if priority == PriorityHigh {
+				priorityQueue.packets = append(priorityQueue.packets, packet)
+			} else {
+				normalQueue.packets = append(normalQueue.packets, packet)
+			}
+		}
+
 		if (fds[1].Revents & unix.POLLIN) != 0 {
-			numBytes, numFrames := forwardFrames(outXsk, inXsk)
+
+			//prio
+			if len(priorityQueue.packets) > 0 {
+				packet := priorityQueue.packets[0]
+				priorityQueue.packets = priorityQueue.packets[1:]
+				numBytes, numFrames = forwardPacket(packet, outXsk, inXsk)
+				numBytesTotal += numBytes
+				numFramesTotal += numFrames
+			} else if len(normalQueue.packets) > 0 {
+				packet := normalQueue.packets[0]
+				normalQueue.packets = normalQueue.packets[1:]
+				numBytes, numFrames = forwardPacket(packet, outXsk, inXsk)
+				numBytesTotal += numBytes
+				numFramesTotal += numFrames
+			}
+
+			/*numBytes, numFrames := forwardFrames(outXsk, inXsk)
 			numBytesTotal += numBytes
-			numFramesTotal += numFrames
+			numFramesTotal += numFrames*/
 		}
 		if (fds[1].Revents & unix.POLLOUT) != 0 {
 			outXsk.Complete(outXsk.NumCompleted())
@@ -237,7 +275,57 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 
 }
 
-func forwardPacket(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
+func forwardPacket(descriptor []byte, input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
+	// First, we need to find the packet that matches the provided descriptor.
+	var matchingPacket []byte
+	inDescs := input.Receive(input.NumReceived())
+
+	for _, desc := range inDescs {
+		// Assuming the descriptor is some form of identifier you can use to match packets.
+		if bytes.Equal(desc, descriptor) {
+			matchingPacket = input.GetFrame(desc)
+			break
+		}
+	}
+
+	if matchingPacket == nil {
+		// No matching packet was found, handle this case.
+		return 0, 0
+	}
+
+	// Prepare to send the packet.
+	outDescs := output.GetDescs(1, false)
+	if len(outDescs) == 0 {
+		// Handle the case where no descriptors are available.
+		return 0, 0
+	}
+
+	outFrame := output.GetFrame(outDescs[0])
+
+	// Copy the matching packet data to the output frame.
+	numBytes = uint64(len(matchingPacket))
+	copiedBytes := copy(outFrame, matchingPacket)
+	if copiedBytes != len(matchingPacket) {
+		// If we couldn't copy all the bytes, handle this case.
+		return 0, 0
+	}
+
+	// Update the descriptor with the number of bytes we're sending.
+	outDescs[0].Len = uint32(copiedBytes)
+
+	// Now, actually send the packet.
+	err := output.Transmit(outDescs[:1])
+	if err != nil {
+		// Handle the error accordingly.
+		return 0, 0
+	}
+
+	// If everything was successful, return the number of bytes and frames sent.
+	return numBytes, 1 // We've sent one frame.
+}
+
+/*
+func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 
@@ -257,10 +345,31 @@ func forwardPacket(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numF
 	output.Transmit(outDescs)
 
 	return
-}
+}*/
 
-func getPacketPriority(packet []byte) int {
-	// Implement your logic here to determine packet priority
-	// For simplicity, assume all packets have normal priority.
+func getPacketPriority(descriptor []byte, queue *xdp.Socket) int {
+	// Retrieve the actual packet using the descriptor.
+	packetData := GetPacket(descriptor, queue)
+	if packetData == nil {
+		// Handle the case where the packet is not found.
+		return PriorityNormal
+	}
+
+	// Create a new packet from the raw bytes.
+	packet := gopacket.NewPacket(packetData, layers.LayerTypeEthernet, gopacket.Default)
+
+	// Check if the packet has a VLAN layer.
+	vlanLayer := packet.Layer(layers.LayerTypeDot1Q)
+	if vlanLayer != nil {
+		// Type assert the layer to the Dot1Q type to access its fields.
+		vlan, _ := vlanLayer.(*layers.Dot1Q)
+
+		// Check the VLAN ID.
+		if vlan.VLANIdentifier == 10 {
+			return PriorityHigh
+		}
+	}
+
+	// Default priority if no VLAN or VLAN ID is not 10.
 	return PriorityNormal
 }
