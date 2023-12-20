@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"log"
@@ -151,7 +150,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 		}()
 	}
 	//two struct of queues where I store FDs from in and out interfaces
-	var fds [2]unix.PollFd 
+	var fds [2]unix.PollFd
 	fds[0].Fd = int32(inXsk.FD())
 	fds[1].Fd = int32(outXsk.FD())
 	go func() {
@@ -275,7 +274,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 
 }
 
-func forwardPacket(descriptor []byte, input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
+/*func forwardPacket(descriptor []byte, input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
 	// First, we need to find the packet that matches the provided descriptor.
 	var matchingPacket []byte
 	inDescs := input.Receive(input.NumReceived())
@@ -322,7 +321,7 @@ func forwardPacket(descriptor []byte, input *xdp.Socket, output *xdp.Socket) (nu
 
 	// If everything was successful, return the number of bytes and frames sent.
 	return numBytes, 1 // We've sent one frame.
-}
+}*/
 
 /*
 func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
