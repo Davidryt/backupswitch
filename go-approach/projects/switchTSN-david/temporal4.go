@@ -259,7 +259,7 @@ func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink 
 				//storepackets(inXsk, packetQueues)
 				//numBytes, numFrames := forwardFrames(inXsk, outXsk)
 				//numBytes, numFrames := forwardFrames4(inXsk, outXsk, packetQueues)
-				numBytes, numFrames := forwardFrames4(inXsk, outXsk, outXsk2, packetQueues)
+				numBytes, numFrames := forwardFrames5(inXsk, outXsk, outXsk2, packetQueues)
 				numBytesTotal += numBytes
 				numFramesTotal += numFrames
 			}
