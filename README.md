@@ -7,9 +7,9 @@ An early but discarded implementation of AF_XDP based on C language, developed b
 
 In go-approach, a fork with the project [Go-XDP](https://github.com/asavie/xdp) can be found, and the TSN switch versions are stored as a new project in go-approach/projects/switchTSN-david/
 
-switch_bi.go is the basic switch with XDP + eBPF implementation
+temporal3.go is the basic switch with XDP + eBPF implementation with Qbv and 2 interfaces
 
-switch_bi_queue.go is the current work in progress that aims to implement Qbv
+temporal4.go is the current work in progress that implements multiport (currently fixed 3)
 
 ## Installation
 The development environment used to design, test, and validate the implementation was the one provided by the twi previously mentioned projects.
