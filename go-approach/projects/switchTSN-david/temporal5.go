@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/asavie/xdp"
@@ -267,6 +268,43 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 			fds[i].Fd = int32(xsk.FD())
 		}
 	}
+
+	for idx, xsk := range xsks {
+		go func(idx int, xsk *xdp.Socket, xsks []*xdp.Socket) {
+			for {
+				xsk.Fill(xsk.GetDescs(xsk.NumFreeFillSlots(), true))
+
+				fds[0].Events = unix.POLLIN
+
+				if xsk.NumTransmitted() > 0 {
+					fds[0].Events |= unix.POLLOUT
+				}
+				fds[0].Revents = 0
+
+				_, err := unix.Poll(fds[:], -1)
+				if err == syscall.EINTR {
+					// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
+					continue
+				} else if err != nil {
+					fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
+					os.Exit(1)
+				}
+
+				if (fds[0].Revents & unix.POLLIN) != 0 {
+					//storepackets(xsk, packetQueues)
+					//numBytes, numFrames := forwardFrames(xsk, outxsk)
+					//numBytes, numFrames := forwardFrames4(xsk, outxsk, packetQueues)
+					numBytes, numFrames := forwardFrames5(xsk, xsks, idx, packetQueues)
+					numBytesTotal += numBytes
+					numFramesTotal += numFrames
+				}
+				if (fds[0].Revents & unix.POLLOUT) != 0 {
+					xsk.Complete(xsk.NumCompleted())
+				}
+			}
+		}(idx, xsk, xsks)
+	}
+
 	/*
 
 		go func() {
@@ -699,10 +737,15 @@ func forwardFrames3(input *xdp.Socket, packetQueues *PacketQueue, output *xdp.So
 	return
 }*/
 
-func forwardFrames5(input *xdp.Socket, output *xdp.Socket, output2 *xdp.Socket, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
+func forwardFrames5(input *xdp.Socket, xsks []*xdp.Socket, idx int, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
+	var output *xdp.Socket
+	for i, xsk := range xsks {
+		if i != idx {
+			output = xsk
+		}
+	}
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
-	outDescs2 := output2.GetDescs(output2.NumFreeTxSlots(), false)
 	for i := 0; i < len(inDescs); i++ {
 		inFrame := input.GetFrame(inDescs[i])
 		enqueueframe(inFrame, packetQueues)
@@ -714,17 +757,13 @@ func forwardFrames5(input *xdp.Socket, output *xdp.Socket, output2 *xdp.Socket, 
 
 	for i := 0; i < len(sendFrames); i++ {
 		outFrame := output.GetFrame(outDescs[i])
-		outFrame2 := output2.GetFrame(outDescs2[i])
 		inFrame := sendFrames[i]
 		numBytes += uint64(len(inFrame))
 		outDescs[i].Len = uint32(copy(outFrame, inFrame))
-		outDescs2[i].Len = uint32(copy(outFrame2, inFrame))
 	}
 	outDescs = outDescs[:len(sendFrames)]
-	outDescs2 = outDescs2[:len(sendFrames)]
 
 	output.Transmit(outDescs)
-	output2.Transmit(outDescs2)
 
 	clearqueues(packetQueues, sendFrames, prio)
 
