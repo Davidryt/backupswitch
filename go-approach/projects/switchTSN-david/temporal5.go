@@ -269,8 +269,12 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 		}
 	}
 
+	var wg sync.WaitGroup
+
 	for idx, xsk := range xsks {
+		wg.Add(1) // Add to the WaitGroup before starting the goroutine
 		go func(idx int, xsk *xdp.Socket, xsks []*xdp.Socket) {
+			defer wg.Done() // Call Done when the goroutine completes
 			for {
 				xsk.Fill(xsk.GetDescs(xsk.NumFreeFillSlots(), true))
 
@@ -304,6 +308,8 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 			}
 		}(idx, xsk, xsks)
 	}
+
+	wg.Wait() // Wait for all goroutines to complete
 
 	/*
 
