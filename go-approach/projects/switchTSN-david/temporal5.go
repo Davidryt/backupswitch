@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bufio"
+	"encoding/csv"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/asavie/xdp"
@@ -56,6 +59,73 @@ func (pq *PacketQueue) GetPackets(queueIndex int) [][]byte {
 
 //	__________________________________________  MAIN  __________________________________________
 
+func main() {
+	var queues int
+	var verbose bool
+
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s -queues <number of queues>\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+
+	// Assuming these are the other flags you still want to use
+	flag.IntVar(&queues, "queues", 0, "Number of queues (between 1 and 6).")
+	flag.BoolVar(&verbose, "verbose", false, "Output forwarding statistics.")
+	flag.Parse()
+
+	// Read interfaces from CSV file
+	fileName := "interfaces.csv" // Replace with your file name
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatalf("failed to open file %s: %v", fileName, err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(bufio.NewReader(file))
+	var interfaces []netlink.Link
+	var queueIDs []int
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if len(record) != 2 {
+			log.Fatalf("invalid record format: %v", record)
+		}
+
+		ifaceName := record[0]
+		iface, err := netlink.LinkByName(ifaceName)
+		if err != nil {
+			log.Fatalf("failed to fetch info about interface %s: %v", ifaceName, err)
+		}
+		interfaces = append(interfaces, iface)
+
+		queueID, err := strconv.Atoi(record[1])
+		if err != nil {
+			log.Fatalf("invalid queue ID: %s", record[1])
+		}
+		queueIDs = append(queueIDs, queueID)
+	}
+
+	// Validate the number of queues
+	if queues < 1 || queues > 6 {
+		fmt.Println("Error: The 'queues' flag must be between 1 and 6.")
+		os.Exit(1)
+	}
+
+	globalVariable = 1
+	go updateGlobalVariable(queues)
+
+	launchswitch(verbose, interfaces, queueIDs, queues)
+
+}
+
+/*
 func main() {
 	var iface1Name string
 	var iface1QueueID int
@@ -109,7 +179,7 @@ func main() {
 	go updateGlobalVariable(queues)
 
 	launchswitch(verbose, iface1, iface1QueueID, iface2, iface2QueueID, iface3, iface3QueueID, queues)
-}
+}*/
 
 func updateGlobalVariable(queues int) {
 	ticker := time.NewTicker(10 * time.Second)
@@ -128,6 +198,181 @@ func updateGlobalVariable(queues int) {
 	}
 }
 
+func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queues int) {
+	if len(interfaces) != len(queueIDs) {
+		log.Fatalf("Number of interfaces and queue IDs do not match")
+	}
+
+	var xsks []*xdp.Socket
+
+	for i, iface := range interfaces {
+		queueID := queueIDs[i]
+
+		log.Printf("attaching XDP program for %s...", iface.Attrs().Name)
+		prog, err := xdp.LoadProgram("ebpf.o", "xdp_redirect", "qidconf_map", "xsks_map")
+		if err != nil {
+			log.Fatalf("failed to load xdp program: %v\n", err)
+		}
+
+		if err := prog.Attach(iface.Attrs().Index); err != nil {
+			log.Fatalf("failed to attach xdp program to interface: %v\n", err)
+		}
+		defer prog.Detach(iface.Attrs().Index)
+
+		log.Printf("opening XDP socket for %s...", iface.Attrs().Name)
+		xsk, err := xdp.NewSocket(iface.Attrs().Index, queueID, nil)
+		if err != nil {
+			log.Fatalf("failed to open XDP socket for interface %s: %v", iface.Attrs().Name, err)
+		}
+
+		xsks = append(xsks, xsk)
+
+		log.Printf("registering XDP socket for %s...", iface.Attrs().Name)
+		if err := prog.Register(queueID, xsks[i].FD()); err != nil {
+			fmt.Printf("error: failed to register socket in BPF map: %v\n", err)
+			return
+		}
+		defer prog.Unregister(queueID)
+	}
+
+	log.Printf("starting TSN Switch...")
+
+	packetQueues := Createqueues(queues)
+
+	log.Printf("Created %d queues", len(packetQueues.Queues))
+
+	numBytesTotal := uint64(0)
+	numFramesTotal := uint64(0)
+	if verbose {
+		go func() {
+			var numBytesPrev, numFramesPrev uint64
+			var numBytesNow, numFramesNow uint64
+			for {
+				numBytesPrev = numBytesNow
+				numFramesPrev = numFramesNow
+				time.Sleep(time.Duration(1) * time.Second)
+				numBytesNow = numBytesTotal
+				numFramesNow = numFramesTotal
+				pps := numFramesNow - numFramesPrev
+				bps := (numBytesNow - numBytesPrev) * 8
+				log.Printf("%9d pps / %6d Mbps", pps, bps/1000000)
+			}
+		}()
+	}
+
+	fds := make([]unix.PollFd, len(xsks))
+
+	for i, xsk := range xsks {
+		if xsk != nil {
+			fds[i].Fd = int32(xsk.FD())
+		}
+	}
+	/*
+
+		go func() {
+			for {
+
+				inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
+
+				fds[0].Events = unix.POLLIN
+
+				if inXsk.NumTransmitted() > 0 {
+					fds[0].Events |= unix.POLLOUT
+				}
+				fds[0].Revents = 0
+
+				_, err := unix.Poll(fds[:], -1)
+				if err == syscall.EINTR {
+					// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
+					continue
+				} else if err != nil {
+					fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
+					os.Exit(1)
+				}
+
+				if (fds[0].Revents & unix.POLLIN) != 0 {
+					//storepackets(inXsk, packetQueues)
+					//numBytes, numFrames := forwardFrames(inXsk, outXsk)
+					//numBytes, numFrames := forwardFrames4(inXsk, outXsk, packetQueues)
+					numBytes, numFrames := forwardFrames5(inXsk, outXsk, outXsk2, packetQueues)
+					numBytesTotal += numBytes
+					numFramesTotal += numFrames
+				}
+				if (fds[0].Revents & unix.POLLOUT) != 0 {
+					inXsk.Complete(inXsk.NumCompleted())
+				}
+			}
+		}()
+
+		go func() {
+			for {
+				outXsk2.Fill(outXsk2.GetDescs(outXsk2.NumFreeFillSlots(), true))
+
+				fds[2].Events = unix.POLLIN
+				if outXsk2.NumTransmitted() > 0 {
+					fds[2].Events |= unix.POLLOUT
+				}
+
+				fds[2].Revents = 0
+
+				_, err := unix.Poll(fds[:], -1)
+				if err == syscall.EINTR {
+					// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
+					continue
+				} else if err != nil {
+					fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
+					os.Exit(1)
+				}
+
+				if (fds[2].Revents & unix.POLLIN) != 0 {
+					//storepackets(outXsk, packetQueues)
+					//numBytes, numFrames := forwardFrames(outXsk, inXsk)
+					//numBytes, numFrames := forwardFrames4(outXsk2, inXsk, packetQueues)
+					numBytes, numFrames := forwardFrames5(outXsk2, inXsk, outXsk, packetQueues)
+					numBytesTotal += numBytes
+					numFramesTotal += numFrames
+				}
+				if (fds[2].Revents & unix.POLLOUT) != 0 {
+					outXsk2.Complete(outXsk2.NumCompleted())
+				}
+			}
+		}()
+
+		for {
+			outXsk.Fill(outXsk.GetDescs(outXsk.NumFreeFillSlots(), true))
+
+			fds[1].Events = unix.POLLIN
+			if outXsk.NumTransmitted() > 0 {
+				fds[1].Events |= unix.POLLOUT
+			}
+
+			fds[1].Revents = 0
+
+			_, err := unix.Poll(fds[:], -1)
+			if err == syscall.EINTR {
+				// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
+				continue
+			} else if err != nil {
+				fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
+				os.Exit(1)
+			}
+
+			if (fds[1].Revents & unix.POLLIN) != 0 {
+				//storepackets(outXsk, packetQueues)
+				//numBytes, numFrames := forwardFrames(outXsk, inXsk)
+				//numBytes, numFrames := forwardFrames4(outXsk, inXsk, packetQueues)
+				numBytes, numFrames := forwardFrames5(outXsk, inXsk, outXsk2, packetQueues)
+				numBytesTotal += numBytes
+				numFramesTotal += numFrames
+			}
+			if (fds[1].Revents & unix.POLLOUT) != 0 {
+				outXsk.Complete(outXsk.NumCompleted())
+			}
+		}*/
+
+}
+
+/*
 func launchswitch(verbose bool, iface1 netlink.Link, iface1QueueID int, iface2 netlink.Link, iface2QueueID int, iface3 netlink.Link, iface3QueueID int, queues int) {
 	//HERE WE DO INTERFACE 1
 
@@ -336,6 +581,7 @@ func launchswitch(verbose bool, iface1 netlink.Link, iface1QueueID int, iface2 n
 	}
 
 }
+*/
 
 /*func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
