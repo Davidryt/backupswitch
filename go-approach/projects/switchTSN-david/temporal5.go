@@ -278,12 +278,12 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 			for {
 				xsks[idx].Fill(xsks[idx].GetDescs(xsks[idx].NumFreeFillSlots(), true))
 
-				fds[0].Events = unix.POLLIN
+				fds[idx].Events = unix.POLLIN
 
 				if xsks[idx].NumTransmitted() > 0 {
-					fds[0].Events |= unix.POLLOUT
+					fds[idx].Events |= unix.POLLOUT
 				}
-				fds[0].Revents = 0
+				fds[idx].Revents = 0
 
 				_, err := unix.Poll(fds[:], -1)
 				if err == syscall.EINTR {
@@ -294,7 +294,7 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 					os.Exit(1)
 				}
 
-				if (fds[0].Revents & unix.POLLIN) != 0 {
+				if (fds[idx].Revents & unix.POLLIN) != 0 {
 					//storepackets(xsks[idx], packetQueues)
 					//numBytes, numFrames := forwardFrames(xsks[idx], outxsks[idx])
 					numBytes, numFrames := forwardFrames4(xsks[0], xsks[1], packetQueues)
@@ -314,12 +314,12 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 		for {
 			xsks[lastIdx].Fill(xsks[lastIdx].GetDescs(xsks[lastIdx].NumFreeFillSlots(), true))
 
-			fds[0].Events = unix.POLLIN
+			fds[lastIdx].Events = unix.POLLIN
 
 			if xsks[lastIdx].NumTransmitted() > 0 {
-				fds[0].Events |= unix.POLLOUT
+				fds[lastIdx].Events |= unix.POLLOUT
 			}
-			fds[0].Revents = 0
+			fds[lastIdx].Revents = 0
 
 			_, err := unix.Poll(fds[:], -1)
 			if err == syscall.EINTR {
@@ -330,7 +330,7 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 				os.Exit(1)
 			}
 
-			if (fds[0].Revents & unix.POLLIN) != 0 {
+			if (fds[lastIdx].Revents & unix.POLLIN) != 0 {
 				//storepackets(xsks[lastIdx], packetQueues)
 				//numBytes, numFrames := forwardFrames(xsks[lastIdx], outxsks[lastIdx])
 				numBytes, numFrames := forwardFrames4(xsks[1], xsks[0], packetQueues)
@@ -338,7 +338,7 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 				numBytesTotal += numBytes
 				numFramesTotal += numFrames
 			}
-			if (fds[0].Revents & unix.POLLOUT) != 0 {
+			if (fds[lastIdx].Revents & unix.POLLOUT) != 0 {
 				xsks[lastIdx].Complete(xsks[lastIdx].NumCompleted())
 			}
 		}
