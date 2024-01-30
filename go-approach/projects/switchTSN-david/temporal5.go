@@ -297,8 +297,8 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 				if (fds[0].Revents & unix.POLLIN) != 0 {
 					//storepackets(xsks[idx], packetQueues)
 					//numBytes, numFrames := forwardFrames(xsks[idx], outxsks[idx])
-					//numBytes, numFrames := forwardFrames4(xsks[idx], outxsks[idx], packetQueues)
-					numBytes, numFrames := forwardFrames5(xsks[idx], xsks, idx, packetQueues)
+					numBytes, numFrames := forwardFrames4(xsks[0], xsks[1], packetQueues)
+					//numBytes, numFrames := forwardFrames5(xsks[idx], xsks, idx, packetQueues)
 					numBytesTotal += numBytes
 					numFramesTotal += numFrames
 				}
@@ -333,8 +333,8 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 			if (fds[0].Revents & unix.POLLIN) != 0 {
 				//storepackets(xsks[lastIdx], packetQueues)
 				//numBytes, numFrames := forwardFrames(xsks[lastIdx], outxsks[lastIdx])
-				//numBytes, numFrames := forwardFrames4(xsks[lastIdx], outxsks[lastIdx], packetQueues)
-				numBytes, numFrames := forwardFrames5(xsks[lastIdx], xsks, idx, packetQueues)
+				numBytes, numFrames := forwardFrames4(xsks[1], xsks[0], packetQueues)
+				//numBytes, numFrames := forwardFrames5(xsks[lastIdx], xsks, idx, packetQueues)
 				numBytesTotal += numBytes
 				numFramesTotal += numFrames
 			}
@@ -751,7 +751,7 @@ func forwardFrames3(input *xdp.Socket, packetQueues *PacketQueue, output *xdp.So
 	return numBytes, numFrames
 }*/
 
-/*func forwardFrames4(input *xdp.Socket, output *xdp.Socket, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
+func forwardFrames4(input *xdp.Socket, output *xdp.Socket, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 	for i := 0; i < len(inDescs); i++ {
@@ -776,7 +776,7 @@ func forwardFrames3(input *xdp.Socket, packetQueues *PacketQueue, output *xdp.So
 	clearqueues(packetQueues, sendFrames, prio)
 
 	return
-}*/
+}
 
 func forwardFrames5(input *xdp.Socket, xsks []*xdp.Socket, idx int, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
