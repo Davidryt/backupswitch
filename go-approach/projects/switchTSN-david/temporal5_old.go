@@ -269,18 +269,18 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 		}
 	}
 
-	var wg sync.WaitGroup
+	//var wg sync.WaitGroup
 
-	for idx, xsk := range xsks {
-		wg.Add(1) // Add to the WaitGroup before starting the goroutine
-		go func(idx int, xsk *xdp.Socket, xsks []*xdp.Socket) {
-			defer wg.Done() // Call Done when the goroutine completes
+	for idx := 0; idx < len(xsks)-1; idx++ {
+		//wg.Add(1) // Add to the WaitGroup before starting the goroutine
+		go func(idx int, xsks []*xdp.Socket) {
+			//defer wg.Done() // Call Done when the goroutine completes
 			for {
-				xsk.Fill(xsk.GetDescs(xsk.NumFreeFillSlots(), true))
+				xsks[idx].Fill(xsks[idx].GetDescs(xsks[idx].NumFreeFillSlots(), true))
 
 				fds[idx].Events = unix.POLLIN
 
-				if xsk.NumTransmitted() > 0 {
+				if xsks[idx].NumTransmitted() > 0 {
 					fds[idx].Events |= unix.POLLOUT
 				}
 				fds[idx].Revents = 0
@@ -295,21 +295,56 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 				}
 
 				if (fds[idx].Revents & unix.POLLIN) != 0 {
-					//storepackets(xsk, packetQueues)
-					//numBytes, numFrames := forwardFrames(xsk, outxsk)
-					//numBytes, numFrames := forwardFrames4(xsk, outxsk, packetQueues)
-					numBytes, numFrames := forwardFrames5(xsk, xsks, idx, packetQueues)
+					//storepackets(xsks[idx], packetQueues)
+					//numBytes, numFrames := forwardFrames(xsks[idx], outxsks[idx])
+					numBytes, numFrames := forwardFrames4(xsks[0], xsks[1], packetQueues)
+					//numBytes, numFrames := forwardFrames5(xsks[idx], xsks, idx, packetQueues)
 					numBytesTotal += numBytes
 					numFramesTotal += numFrames
 				}
-				if (fds[idx].Revents & unix.POLLOUT) != 0 {
-					xsk.Complete(xsk.NumCompleted())
+				if (fds[0].Revents & unix.POLLOUT) != 0 {
+					xsks[idx].Complete(xsks[idx].NumCompleted())
 				}
 			}
-		}(idx, xsk, xsks)
+		}(idx, xsks)
 	}
 
-	wg.Wait() // Wait for all goroutines to complete
+	if len(xsks) > 0 {
+		lastIdx := len(xsks) - 1
+		for {
+			xsks[lastIdx].Fill(xsks[lastIdx].GetDescs(xsks[lastIdx].NumFreeFillSlots(), true))
+
+			fds[lastIdx].Events = unix.POLLIN
+
+			if xsks[lastIdx].NumTransmitted() > 0 {
+				fds[lastIdx].Events |= unix.POLLOUT
+			}
+			fds[lastIdx].Revents = 0
+
+			_, err := unix.Poll(fds[:], -1)
+			if err == syscall.EINTR {
+				// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
+				continue
+			} else if err != nil {
+				fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
+				os.Exit(1)
+			}
+
+			if (fds[lastIdx].Revents & unix.POLLIN) != 0 {
+				//storepackets(xsks[lastIdx], packetQueues)
+				//numBytes, numFrames := forwardFrames(xsks[lastIdx], outxsks[lastIdx])
+				numBytes, numFrames := forwardFrames4(xsks[1], xsks[0], packetQueues)
+				//numBytes, numFrames := forwardFrames5(xsks[lastIdx], xsks, idx, packetQueues)
+				numBytesTotal += numBytes
+				numFramesTotal += numFrames
+			}
+			if (fds[lastIdx].Revents & unix.POLLOUT) != 0 {
+				xsks[lastIdx].Complete(xsks[lastIdx].NumCompleted())
+			}
+		}
+	}
+
+	//wg.Wait() // Wait for all goroutines to complete
 
 	/*
 
@@ -716,7 +751,7 @@ func forwardFrames3(input *xdp.Socket, packetQueues *PacketQueue, output *xdp.So
 	return numBytes, numFrames
 }*/
 
-/*func forwardFrames4(input *xdp.Socket, output *xdp.Socket, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
+func forwardFrames4(input *xdp.Socket, output *xdp.Socket, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 	for i := 0; i < len(inDescs); i++ {
@@ -741,7 +776,7 @@ func forwardFrames3(input *xdp.Socket, packetQueues *PacketQueue, output *xdp.So
 	clearqueues(packetQueues, sendFrames, prio)
 
 	return
-}*/
+}
 
 func forwardFrames5(input *xdp.Socket, xsks []*xdp.Socket, idx int, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
