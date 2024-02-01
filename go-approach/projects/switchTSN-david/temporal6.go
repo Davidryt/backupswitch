@@ -218,7 +218,7 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 		wg.Add(2) // Two goroutines per socket
 
 		// Goroutine for handling incoming packets
-		go handleIncoming(&wg, idx, xsk, xsks)
+		go handleIncoming(&wg, idx, xsk, xsks, numBytesTotal, numFramesTotal, packetQueues)
 
 		// Goroutine for handling outgoing packets
 		go handleOutgoing(&wg, idx, xsk, xsks)
@@ -228,7 +228,7 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 
 }
 
-func handleIncoming(wg *sync.WaitGroup, idx int, xsk *xdp.Socket, xsks []*xdp.Socket) {
+func handleIncoming(wg *sync.WaitGroup, idx int, xsk *xdp.Socket, xsks []*xdp.Socket, numBytesTotal uint64, numFramesTotal uint64, packetQueues *PacketQueue) {
 	defer wg.Done()
 
 	// Setup for polling incoming packets
@@ -373,7 +373,7 @@ func getPriority(frame []byte) (int, error) {
 		priority = vlanID
 	} else {*/
 	// Asignar una prioridad por defecto a paquetes que no son VLAN
-	priority = 1 // defaultPriority es un valor que debes definir
+	priority := 1 // defaultPriority es un valor que debes definir
 	/*}*/
 	return priority, nil
 }

@@ -856,9 +856,9 @@ func getPriority(frame []byte) (int, error) {
 		}
 		priority = vlanID
 	} else {*/
-		// Asignar una prioridad por defecto a paquetes que no son VLAN
-		priority = 1 // defaultPriority es un valor que debes definir
-	/*}
+	// Asignar una prioridad por defecto a paquetes que no son VLAN
+	priority := 1 // defaultPriority es un valor que debes definir
+	/*}*/
 	return priority, nil
 }
 
