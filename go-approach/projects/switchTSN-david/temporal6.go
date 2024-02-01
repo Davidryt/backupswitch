@@ -218,7 +218,7 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 		wg.Add(2) // Two goroutines per socket
 
 		// Goroutine for handling incoming packets
-		go handleIncoming(&wg, idx, xsk, xsks, numBytesTotal, numFramesTotal, packetQueues)
+		go handleIncoming(&wg, idx, xsk, xsks, &numBytesTotal, &numFramesTotal, packetQueues)
 
 		// Goroutine for handling outgoing packets
 		go handleOutgoing(&wg, idx, xsk, xsks)
@@ -228,7 +228,7 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 
 }
 
-func handleIncoming(wg *sync.WaitGroup, idx int, xsk *xdp.Socket, xsks []*xdp.Socket, numBytesTotal uint64, numFramesTotal uint64, packetQueues *PacketQueue) {
+func handleIncoming(wg *sync.WaitGroup, idx int, xsk *xdp.Socket, xsks []*xdp.Socket, numBytesTotal *uint64, numFramesTotal *uint64, packetQueues *PacketQueue) {
 	defer wg.Done()
 
 	// Setup for polling incoming packets
@@ -248,8 +248,8 @@ func handleIncoming(wg *sync.WaitGroup, idx int, xsk *xdp.Socket, xsks []*xdp.So
 		if fds[0].Revents&unix.POLLIN != 0 {
 			// Original logic for handling incoming packets
 			numBytes, numFrames := forwardFrames5(xsk, xsks, idx, packetQueues)
-			numBytesTotal += numBytes
-			numFramesTotal += numFrames
+			*numBytesTotal += numBytes
+			*numFramesTotal += numFrames
 		}
 	}
 }
