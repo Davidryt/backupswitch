@@ -745,15 +745,18 @@ func forwardFrames3(input *xdp.Socket, packetQueues *PacketQueue, output *xdp.So
 
 func forwardFrames5(input *xdp.Socket, xsks []*xdp.Socket, idx int, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
+	//change
 	var output *xdp.Socket
 	for i, xsk := range xsks {
 		if i != idx {
 			output = xsk
 		}
 	}
+
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 	for i := 0; i < len(inDescs); i++ {
 		inFrame := input.GetFrame(inDescs[i])
+		//need work on vlan
 		enqueueframe(inFrame, packetQueues)
 	}
 
@@ -845,18 +848,18 @@ func clearqueues(packetQueues *PacketQueue, sentFrames [][]byte, prio int) {
 }
 
 func getPriority(frame []byte) (int, error) {
-	priority := -1
+	/*priority := -1
 	if isVLAN(frame) {
 		vlanID, err := getVLANID(frame)
 		if err != nil {
 			return -1, err
 		}
 		priority = vlanID
-	} else {
-		// Asignar una prioridad por defecto a paquetes que no son VLAN
-		priority = 1 // defaultPriority es un valor que debes definir
-	}
-	return priority, nil
+	} else {*/
+	// Asignar una prioridad por defecto a paquetes que no son VLAN
+	priority = 1 // defaultPriority es un valor que debes definir
+	/*}
+	return priority, nil*/
 }
 
 func isVLAN(frame []byte) bool {
