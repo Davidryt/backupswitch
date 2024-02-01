@@ -235,6 +235,9 @@ func handleIncoming(wg *sync.WaitGroup, idx int, xsk *xdp.Socket, xsks []*xdp.So
 	fds := []unix.PollFd{{Fd: int32(xsk.FD()), Events: unix.POLLIN}}
 
 	for {
+
+		xsk.Fill(xsk.GetDescs(xsk.NumFreeFillSlots(), true))
+
 		// Poll the socket for incoming packets
 		_, err := unix.Poll(fds, -1)
 		if err != nil {
