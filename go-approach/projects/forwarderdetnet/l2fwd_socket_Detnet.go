@@ -178,12 +178,13 @@ func forwardFrames(input *xdp.Socket, fdsock int) /*, output *xdp.Socket, dstMac
 		inDescs = inDescs[:len(outDescs)]
 	}*/
 	numFrames = uint64(len(inDescs))
-	addr := &syscall.SockaddrUnix{Name: "/path/to/socket"}
+	addr := &syscall.SockaddrUnix{Name: "/home/netcom/detnet-socket/det-r.socket"}
 	for i := 0; i < len(inDescs); i++ {
 		//outFrame := output.GetFrame(outDescs[i])
 		inFrame := input.GetFrame(inDescs[i])
 		numBytes += uint64(len(inFrame))
-		log.Printf("inframe: %d", inFrame)
+		//log.Printf("inframe: %d", inFrame)
+		log.Printf("\n\nPacket received with lenght: %d", len(inFrame))
 		if err := syscall.Sendto(fdsock, inFrame, 0, addr); err != nil {
 			log.Printf("sendto failed: %v", err)
 			// Handle error or continue based on your error handling policy.
