@@ -1,8 +1,3 @@
-/*
-l2fwd is a primitive layer 2 frame forwarder, it attaches to two given network
-links and transmits any frames received on any of them on the other network
-link with the given destination MAC address.
-*/
 package main
 
 import (
@@ -124,7 +119,10 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 	fds[0].Fd = int32(inXsk.FD())
 	//fds[1].Fd = int32(outXsk.FD())
 
-	fdsock, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_RAW)
+	fdsock, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_RAW, 0)
+	if err != nil {
+		log.Fatalf("failed to create socket: %v", err)
+	}
 
 	for {
 		inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
@@ -180,13 +178,16 @@ func forwardFrames(input *xdp.Socket, fdsock int) /*, output *xdp.Socket, dstMac
 		inDescs = inDescs[:len(outDescs)]
 	}*/
 	numFrames = uint64(len(inDescs))
-	addr := syscall.SockaddrUnix("Hola")
+	addr := &syscall.SockaddrUnix{Name: "/path/to/socket"}
 	for i := 0; i < len(inDescs); i++ {
 		//outFrame := output.GetFrame(outDescs[i])
 		inFrame := input.GetFrame(inDescs[i])
 		numBytes += uint64(len(inFrame))
 		log.Printf("inframe: %d", inFrame)
-		syscall.Sendto(fdsock, inFrame, 0, addr)
+		if err := syscall.Sendto(fdsock, inFrame, 0, addr); err != nil {
+			log.Printf("sendto failed: %v", err)
+			// Handle error or continue based on your error handling policy.
+		}
 		//outDescs[i].Len = uint32(copy(outFrame, inFrame))
 	}
 	//outDescs = outDescs[:len(inDescs)]
