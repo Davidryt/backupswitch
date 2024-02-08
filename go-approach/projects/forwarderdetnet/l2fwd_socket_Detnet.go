@@ -67,9 +67,9 @@ func main() {
 
 func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLinkDst net.HardwareAddr, outLink netlink.Link, outLinkQueueID int, outLinkDst net.HardwareAddr) {
 	log.Printf("attaching XDP program for %s...", inLink.Attrs().Name)
-	inProg, err := xdp.NewProgram(inLinkQueueID + 1)
+	inProg, err := xdp.LoadProgram("ebpf.o", "xdp_redirect", "qidconf_map", "xsks_map")
 	if err != nil {
-		log.Fatalf("failed to create xdp program: %v\n", err)
+		log.Fatalf("failed to load xdp program: %v\n", err)
 	}
 	if err := inProg.Attach(inLink.Attrs().Index); err != nil {
 		log.Fatalf("failed to attach xdp program to interface: %v\n", err)
