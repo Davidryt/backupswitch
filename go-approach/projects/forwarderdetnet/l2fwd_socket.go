@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"syscall"
 	"time"
@@ -41,7 +40,7 @@ func main() {
 	flag.BoolVar(&verbose, "verbose", false, "Output forwarding statistics.")
 	flag.Parse()
 
-	if inLinkName == "" {//|| outLinkName == "" {
+	if inLinkName == "" { //|| outLinkName == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -71,7 +70,7 @@ func main() {
 	forwardL2(verbose, inLink, inLinkQueueID) //, inLinkDst//, outLink, outLinkQueueID, outLinkDst)
 }
 
-func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) //, inLinkDst net.HardwareAddr, outLink netlink.Link, outLinkQueueID int, outLinkDst net.HardwareAddr) {
+func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLinkDst net.HardwareAddr, outLink netlink.Link, outLinkQueueID int, outLinkDst net.HardwareAddr) {
 	log.Printf("attaching XDP program for %s...", inLink.Attrs().Name)
 	inProg, err := xdp.NewProgram(inLinkQueueID + 1)
 	if err != nil {
