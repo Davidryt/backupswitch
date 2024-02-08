@@ -123,6 +123,9 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 	var fds [2]unix.PollFd
 	fds[0].Fd = int32(inXsk.FD())
 	//fds[1].Fd = int32(outXsk.FD())
+
+	fdsock, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_RAW)
+
 	for {
 		inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
 		//outXsk.Fill(outXsk.GetDescs(outXsk.NumFreeFillSlots(), true))
@@ -149,7 +152,7 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 		}
 
 		if (fds[0].Revents & unix.POLLIN) != 0 {
-			numBytes, numFrames := forwardFrames(inXsk)
+			numBytes, numFrames := forwardFrames(inXsk, fdsock)
 			numBytesTotal += numBytes
 			numFramesTotal += numFrames
 		}
@@ -167,7 +170,7 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 	}
 }
 
-func forwardFrames(input *xdp.Socket) /*, output *xdp.Socket, dstMac net.HardwareAddr)*/ (numBytes uint64, numFrames uint64) {
+func forwardFrames(input *xdp.Socket, fdsock int) /*, output *xdp.Socket, dstMac net.HardwareAddr)*/ (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
 	//replaceDstMac(input, inDescs, dstMac)
 
@@ -177,12 +180,13 @@ func forwardFrames(input *xdp.Socket) /*, output *xdp.Socket, dstMac net.Hardwar
 		inDescs = inDescs[:len(outDescs)]
 	}*/
 	numFrames = uint64(len(inDescs))
-
+	addr := syscall.SockaddrUnix("Hola")
 	for i := 0; i < len(inDescs); i++ {
 		//outFrame := output.GetFrame(outDescs[i])
 		inFrame := input.GetFrame(inDescs[i])
 		numBytes += uint64(len(inFrame))
 		log.Printf("inframe: %d", inFrame)
+		syscall.Sendto(fdsock, inFrame, 0, addr)
 		//outDescs[i].Len = uint32(copy(outFrame, inFrame))
 	}
 	//outDescs = outDescs[:len(inDescs)]
