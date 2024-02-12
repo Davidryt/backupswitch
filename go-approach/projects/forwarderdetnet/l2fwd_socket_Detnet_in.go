@@ -123,7 +123,7 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 	if err != nil {
 		log.Fatalf("failed to create socket: %v", err)
 	}
-
+	packets:=uint64(0)
 	for {
 		inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
 		//outXsk.Fill(outXsk.GetDescs(outXsk.NumFreeFillSlots(), true))
@@ -153,6 +153,8 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 			numBytes, numFrames := forwardFrames(inXsk, fdsock)
 			numBytesTotal += numBytes
 			numFramesTotal += numFrames
+			packets+=numFrames
+			log.Printf("paquetes %d", packets)
 		}
 		if (fds[0].Revents & unix.POLLOUT) != 0 {
 			inXsk.Complete(inXsk.NumCompleted())
@@ -168,8 +170,9 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 	}
 }
 
-func forwardFrames(input *xdp.Socket, fdsock int) /*, output *xdp.Socket, dstMac net.HardwareAddr)*/ (numBytes uint64, numFrames uint64) {
+func forwardFrames(input *xdp.Socket, fdsock int) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
+	
 	//replaceDstMac(input, inDescs, dstMac)
 
 	//outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
@@ -195,7 +198,7 @@ func forwardFrames(input *xdp.Socket, fdsock int) /*, output *xdp.Socket, dstMac
 
 	//output.Transmit(outDescs)
 
-	return
+	return 
 }
 
 /*func replaceDstMac(xsk *xdp.Socket, descs []xdp.Desc, dstMac net.HardwareAddr) {

@@ -39,7 +39,7 @@ func main() {
 
 func receiveAndForward(unixSocketPath string, outLink netlink.Link, outLinkQueueID int, verbose bool) {
 	// Create and bind the Unix domain socket
-	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_DGRAM, 0)
+	fd, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_RAW, 0)
 	if err != nil {
 		log.Fatalf("failed to create Unix domain socket: %v", err)
 	}
@@ -50,7 +50,7 @@ func receiveAndForward(unixSocketPath string, outLink netlink.Link, outLinkQueue
 
 	// Load the XDP program and create an XDP socket
 	log.Printf("Attaching XDP program to %s...\n", outLink.Attrs().Name)
-	xdpProg, err := xdp.LoadProgram("ebpf.o", "xdp_pass", "", "")
+	xdpProg, err := xdp.LoadProgram("ebpf.o", "xdp_redirect", "qidconf_map", "xsks_map")
 	if err != nil {
 		log.Fatalf("failed to load XDP program: %v", err)
 	}
@@ -63,8 +63,9 @@ func receiveAndForward(unixSocketPath string, outLink netlink.Link, outLinkQueue
 	defer xsk.Close()
 
 	log.Println("Listening for packets to forward...")
+	all:=0
 	for {
-		buf := make([]byte, 2048)
+		buf := make([]byte, 9000)
 		n, _, err := syscall.Recvfrom(fd, buf, 0)
 		if err != nil {
 			log.Printf("error receiving from Unix socket: %v", err)
@@ -72,22 +73,24 @@ func receiveAndForward(unixSocketPath string, outLink netlink.Link, outLinkQueue
 		}
 
 		// Forward the packet via XDP
-		if err := forwardPacket(xsk, buf[:n]); err != nil {
+		alltemp, err := forwardPacket(xsk, buf[:n],all)
+		all=alltemp
+		if err != nil {
 			log.Printf("error forwarding packet: %v", err)
 		}
 	}
 }
 
-func forwardPacket(xsk *xdp.Socket, packet []byte) error {
+func forwardPacket(xsk *xdp.Socket, packet []byte, all int) (int, error) {
 
 	if xsk.NumFreeTxSlots() == 0 {
-		return fmt.Errorf("no free TX slots available")
+		return -1, fmt.Errorf("no free TX slots available")
 	}
 
 	// Allocate a descriptor for the packet.
 	descs := xsk.GetDescs(1, false) // Assuming a method to get one TX descriptor.
 	if len(descs) == 0 {
-		return fmt.Errorf("failed to allocate a descriptor for the packet")
+		return -1, fmt.Errorf("failed to allocate a descriptor for the packet")
 	}
 	desc := descs[0]
 
@@ -97,18 +100,25 @@ func forwardPacket(xsk *xdp.Socket, packet []byte) error {
 	desc.Len = uint32(len(packet))
 
 	// Log packet transmission details if verbose is enabled.
-	if verbose {
-		log.Printf("Sending packet: %d bytes\n", len(packet))
-	}
+	
+	log.Printf("Sending packet: %d bytes\n", len(packet))
+	
 
 	// Enqueue the packet for transmission.
-	if err := xsk.Transmit(descs); err != nil {
+	/*if err :=*/ 
+	xsk.Transmit(descs); 
+	/*err != 0 {
 		return fmt.Errorf("failed to enqueue packet for transmission: %v", err)
-	}
+	}*/
 
 	// Optionally, you can immediately attempt to complete pending transmissions.
 	// This step may be moved outside of this function for batch processing.
-	xsk.Complete(xsk.NumCompleted())
+	log.Printf("Free TX slots after transmission attempt: %d\n", xsk.NumFreeTxSlots())
+	
+    	completed := xsk.NumCompleted()
+    	all = all+1
+    	log.Printf("Packets completed: %d\nTotal sent %d\n", completed,all)
+    	xsk.Complete(completed)
 
-	return nil
+	return all, nil
 }
