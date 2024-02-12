@@ -96,6 +96,11 @@ func forwardPacket(xsk *xdp.Socket, packet []byte) error {
 	copy(frame, packet)
 	desc.Len = uint32(len(packet))
 
+	// Log packet transmission details if verbose is enabled.
+	if verbose {
+		log.Printf("Sending packet: %d bytes\n", len(packet))
+	}
+
 	// Enqueue the packet for transmission.
 	if err := xsk.Transmit(descs); err != nil {
 		return fmt.Errorf("failed to enqueue packet for transmission: %v", err)
