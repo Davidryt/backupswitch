@@ -49,13 +49,17 @@ func receiveAndForward(unixSocketPath string, outLink netlink.Link, outLinkQueue
 	syscall.Bind(fd, addr) // Note: Check for errors in real code
 
 	// Load the XDP program and create an XDP socket
-	log.Printf("Attaching XDP program to %s...\n", outLink.Attrs().Name)
+	/*log.Printf("Attaching XDP program to %s...\n", outLink.Attrs().Name)
 	xdpProg, err := xdp.LoadProgram("ebpf.o", "xdp_redirect", "qidconf_map", "xsks_map")
 	if err != nil {
 		log.Fatalf("failed to load XDP program: %v", err)
 	}
 	defer xdpProg.Detach(outLink.Attrs().Index)
-
+	
+	if err := xdpProg.Attach(outLink.Attrs().Index); err != nil {
+		log.Fatalf("failed to attach xdp program to interface: %v\n", err)
+	}*/
+	
 	xsk, err := xdp.NewSocket(outLink.Attrs().Index, outLinkQueueID, nil)
 	if err != nil {
 		log.Fatalf("failed to open XDP socket: %v", err)
@@ -84,13 +88,15 @@ func receiveAndForward(unixSocketPath string, outLink netlink.Link, outLinkQueue
 func forwardPacket(xsk *xdp.Socket, packet []byte, all int) (int, error) {
 
 	if xsk.NumFreeTxSlots() == 0 {
-		return -1, fmt.Errorf("no free TX slots available")
+		log.Println("No free TX slots available, waiting for slot.")
+		// Optionally wait or handle this scenario appropriately
+		return all, fmt.Errorf("no free TX slots available")
 	}
 
 	// Allocate a descriptor for the packet.
-	descs := xsk.GetDescs(1, false) // Assuming a method to get one TX descriptor.
+	descs := xsk.GetDescs(1, false)
 	if len(descs) == 0 {
-		return -1, fmt.Errorf("failed to allocate a descriptor for the packet")
+		return all, fmt.Errorf("failed to allocate a descriptor for the packet")
 	}
 	desc := descs[0]
 
@@ -101,24 +107,22 @@ func forwardPacket(xsk *xdp.Socket, packet []byte, all int) (int, error) {
 
 	// Log packet transmission details if verbose is enabled.
 	
-	log.Printf("Sending packet: %d bytes\n", len(packet))
-	
+	log.Printf("Sending packet: %d bytes\n", desc.Len)
+	log.Printf("Packet: %d \n", packet)
 
 	// Enqueue the packet for transmission.
-	/*if err :=*/ 
-	xsk.Transmit(descs); 
-	/*err != 0 {
-		return fmt.Errorf("failed to enqueue packet for transmission: %v", err)
-	}*/
-
-	// Optionally, you can immediately attempt to complete pending transmissions.
-	// This step may be moved outside of this function for batch processing.
-	log.Printf("Free TX slots after transmission attempt: %d\n", xsk.NumFreeTxSlots())
+	tran := xsk.Transmit(descs)
+	if tran < 1 {
+	        log.Printf("Failed to enqueue packet for transmission, tran: %d\n", tran)
+	}
+	
 	
     	completed := xsk.NumCompleted()
     	all = all+1
-    	log.Printf("Packets completed: %d\nTotal sent %d\n", completed,all)
+    	
     	xsk.Complete(completed)
+    	log.Printf("Packets completed: %d --- Total sent %d\n", completed,all)
+    	log.Printf("Free TX slots after transmission attempt: %d\n", xsk.NumFreeTxSlots())
 
 	return all, nil
 }

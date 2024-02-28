@@ -14,6 +14,7 @@ import (
 )
 
 func main() {
+        var unixSocketPath string
 	var inLinkName string
 	//var inLinkDstStr string
 	var inLinkQueueID int
@@ -26,6 +27,7 @@ func main() {
 		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s -inlink <network link name> -outlink <network link name>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
+	flag.StringVar(&unixSocketPath, "unixsocket", "", "Path to the Unix domain socket.")
 	flag.StringVar(&inLinkName, "inlink", "", "Input network link name.")
 	flag.IntVar(&inLinkQueueID, "inlinkqueue", 0, "The queue ID to attach to on input link.")
 	//flag.StringVar(&inLinkDstStr, "inlinkdst", "ff:ff:ff:ff:ff:ff", "Destination MAC address to forward frames to from 'in' interface.")
@@ -62,10 +64,10 @@ func main() {
 		log.Fatalf("failed to fetch info about link %s: %v", outLinkName, err)
 	}*/
 
-	forwardL2(verbose, inLink, inLinkQueueID) //, inLinkDst//, outLink, outLinkQueueID, outLinkDst)
+	forwardL2(unixSocketPath, verbose, inLink, inLinkQueueID) //, inLinkDst//, outLink, outLinkQueueID, outLinkDst)
 }
 
-func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLinkDst net.HardwareAddr, outLink netlink.Link, outLinkQueueID int, outLinkDst net.HardwareAddr) {
+func forwardL2(unixSocketPath string, verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLinkDst net.HardwareAddr, outLink netlink.Link, outLinkQueueID int, outLinkDst net.HardwareAddr) {
 	log.Printf("attaching XDP program for %s...", inLink.Attrs().Name)
 	inProg, err := xdp.LoadProgram("ebpf.o", "xdp_redirect", "qidconf_map", "xsks_map")
 	if err != nil {
@@ -150,11 +152,11 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 		}
 
 		if (fds[0].Revents & unix.POLLIN) != 0 {
-			numBytes, numFrames := forwardFrames(inXsk, fdsock)
+			numBytes, numFrames := forwardFrames(inXsk, fdsock, unixSocketPath)
 			numBytesTotal += numBytes
 			numFramesTotal += numFrames
 			packets+=numFrames
-			log.Printf("paquetes %d", packets)
+			//log.Printf("paquetes %d", packets)
 		}
 		if (fds[0].Revents & unix.POLLOUT) != 0 {
 			inXsk.Complete(inXsk.NumCompleted())
@@ -170,7 +172,7 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 	}
 }
 
-func forwardFrames(input *xdp.Socket, fdsock int) (numBytes uint64, numFrames uint64) {
+func forwardFrames(input *xdp.Socket, fdsock int, unixSocketPath string) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
 	
 	//replaceDstMac(input, inDescs, dstMac)
@@ -181,13 +183,13 @@ func forwardFrames(input *xdp.Socket, fdsock int) (numBytes uint64, numFrames ui
 		inDescs = inDescs[:len(outDescs)]
 	}*/
 	numFrames = uint64(len(inDescs))
-	addr := &syscall.SockaddrUnix{Name: "/home/netcom/detnet-socket/det-r.socket"}
+	addr := &syscall.SockaddrUnix{Name: unixSocketPath}
 	for i := 0; i < len(inDescs); i++ {
 		//outFrame := output.GetFrame(outDescs[i])
 		inFrame := input.GetFrame(inDescs[i])
 		numBytes += uint64(len(inFrame))
 		//log.Printf("inframe: %d", inFrame)
-		log.Printf("\n\nPacket received with lenght: %d", len(inFrame))
+		//log.Printf("\n\nPacket received with lenght: %d", len(inFrame))
 		if err := syscall.Sendto(fdsock, inFrame, 0, addr); err != nil {
 			log.Printf("sendto failed: %v", err)
 			// Handle error or continue based on your error handling policy.
