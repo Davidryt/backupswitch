@@ -282,7 +282,7 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 
 				if xsk.NumTransmitted() > 0 {
 					fds[idx].Events |= unix.POLLOUT
-				}
+				}º
 				fds[idx].Revents = 0
 
 				_, err := unix.Poll(fds[:], -1)
@@ -295,9 +295,6 @@ func launchswitch(verbose bool, interfaces []netlink.Link, queueIDs []int, queue
 				}
 
 				if (fds[idx].Revents & unix.POLLIN) != 0 {
-					//storepackets(xsk, packetQueues)
-					//numBytes, numFrames := forwardFrames(xsk, outxsk)
-					//numBytes, numFrames := forwardFrames4(xsk, outxsk, packetQueues)
 					numBytes, numFrames := forwardFrames5(xsk, xsks, idx, packetQueues)
 					numBytesTotal += numBytes
 					numFramesTotal += numFrames

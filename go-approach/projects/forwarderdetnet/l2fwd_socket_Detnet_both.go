@@ -15,11 +15,7 @@ import (
 
 func main() {
 	var inLinkName string
-	//var inLinkDstStr string
 	var inLinkQueueID int
-	//var outLinkName string
-	//var outLinkDstStr string
-	//var outLinkQueueID int
 	var verbose bool
 
 	flag.Usage = func() {
@@ -28,44 +24,26 @@ func main() {
 	}
 	flag.StringVar(&inLinkName, "inlink", "", "Input network link name.")
 	flag.IntVar(&inLinkQueueID, "inlinkqueue", 0, "The queue ID to attach to on input link.")
-	//flag.StringVar(&inLinkDstStr, "inlinkdst", "ff:ff:ff:ff:ff:ff", "Destination MAC address to forward frames to from 'in' interface.")
-	//flag.StringVar(&outLinkName, "outlink", "", "Output network link name.")
-	//flag.IntVar(&outLinkQueueID, "outlinkqueue", 0, "The queue ID to attach to on output link.")
-	//flag.StringVar(&outLinkDstStr, "outlinkdst", "ff:ff:ff:ff:ff:ff", "Destination MAC address to forward frames to from 'out' interface.")
 	flag.BoolVar(&verbose, "verbose", false, "Output forwarding statistics.")
 	flag.Parse()
 
-	if inLinkName == "" { //|| outLinkName == "" {
+	if inLinkName == "" { 
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	/*inLinkDst, err := net.ParseMAC(inLinkDstStr)
-	if err != nil {
-		flag.Usage()
-		os.Exit(1)
-	}¿/
-
-	/*outLinkDst, err := net.ParseMAC(outLinkDstStr)
-	if err != nil {
-		flag.Usage()
-		os.Exit(1)
-	}*/
 
 	inLink, err := netlink.LinkByName(inLinkName)
 	if err != nil {
 		log.Fatalf("failed to fetch info about link %s: %v", inLinkName, err)
 	}
 
-	/*outLink, err := netlink.LinkByName(outLinkName)
-	if err != nil {
-		log.Fatalf("failed to fetch info about link %s: %v", outLinkName, err)
-	}*/
 
-	forwardL2(verbose, inLink, inLinkQueueID) //, inLinkDst//, outLink, outLinkQueueID, outLinkDst)
+
+	forwardL2(verbose, inLink, inLinkQueueID) 
 }
 
-func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLinkDst net.HardwareAddr, outLink netlink.Link, outLinkQueueID int, outLinkDst net.HardwareAddr) {
+func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { 
 	log.Printf("attaching XDP program for %s...", inLink.Attrs().Name)
 	inProg, err := xdp.LoadProgram("ebpf.o", "xdp_redirect", "qidconf_map", "xsks_map")
 	if err != nil {
@@ -87,12 +65,6 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 	}
 	defer inProg.Unregister(inLinkQueueID)
 
-	// Note: The XDP socket used for transmitting data does not need an EBPF program.
-	/*log.Printf("opening XDP socket for %s...", outLink.Attrs().Name)
-	outXsk, err := xdp.NewSocket(outLink.Attrs().Index, outLinkQueueID, nil)
-	if err != nil {
-		log.Fatalf("failed to open XDP socket for link %s: %v", outLink.Attrs().Name, err)
-	}*/
 
 	log.Printf("starting Detnet forwarder...")
 
@@ -117,29 +89,22 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 
 	var fds [2]unix.PollFd
 	fds[0].Fd = int32(inXsk.FD())
-	//fds[1].Fd = int32(outXsk.FD())
 
 	fdsock, err := syscall.Socket(syscall.AF_UNIX, syscall.SOCK_RAW, 0)
 	if err != nil {
 		log.Fatalf("failed to create socket: %v", err)
 	}
-
+	packets:=uint64(0)
 	for {
 		inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
-		//outXsk.Fill(outXsk.GetDescs(outXsk.NumFreeFillSlots(), true))
 
 		fds[0].Events = unix.POLLIN
 		if inXsk.NumTransmitted() > 0 {
 			fds[0].Events |= unix.POLLOUT
 		}
 
-		/*fds[1].Events = unix.POLLIN
-		if outXsk.NumTransmitted() > 0 {
-			fds[1].Events |= unix.POLLOUT
-		}*/
 
 		fds[0].Revents = 0
-		//fds[1].Revents = 0
 		_, err := unix.Poll(fds[:], -1)
 		if err == syscall.EINTR {
 			// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
@@ -153,34 +118,22 @@ func forwardL2(verbose bool, inLink netlink.Link, inLinkQueueID int) { //, inLin
 			numBytes, numFrames := forwardFrames(inXsk, fdsock)
 			numBytesTotal += numBytes
 			numFramesTotal += numFrames
+			packets+=numFrames
+			log.Printf("paquetes %d", packets)
 		}
 		if (fds[0].Revents & unix.POLLOUT) != 0 {
 			inXsk.Complete(inXsk.NumCompleted())
 		}
-		/*if (fds[1].Revents & unix.POLLIN) != 0 {
-			numBytes, numFrames := forwardFrames(outXsk, inXsk, outLinkDst)
-			numBytesTotal += numBytes
-			numFramesTotal += numFrames
-		}
-		if (fds[1].Revents & unix.POLLOUT) != 0 {
-			outXsk.Complete(outXsk.NumCompleted())
-		}*/
+
 	}
 }
 
-func forwardFrames(input *xdp.Socket, fdsock int) /*, output *xdp.Socket, dstMac net.HardwareAddr)*/ (numBytes uint64, numFrames uint64) {
+func forwardFrames(input *xdp.Socket, fdsock int) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
-	//replaceDstMac(input, inDescs, dstMac)
 
-	//outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
-
-	/*if len(inDescs) > len(outDescs) {
-		inDescs = inDescs[:len(outDescs)]
-	}*/
 	numFrames = uint64(len(inDescs))
 	addr := &syscall.SockaddrUnix{Name: "/home/netcom/detnet-socket/det-r.socket"}
 	for i := 0; i < len(inDescs); i++ {
-		//outFrame := output.GetFrame(outDescs[i])
 		inFrame := input.GetFrame(inDescs[i])
 		numBytes += uint64(len(inFrame))
 		//log.Printf("inframe: %d", inFrame)
@@ -189,18 +142,54 @@ func forwardFrames(input *xdp.Socket, fdsock int) /*, output *xdp.Socket, dstMac
 			log.Printf("sendto failed: %v", err)
 			// Handle error or continue based on your error handling policy.
 		}
-		//outDescs[i].Len = uint32(copy(outFrame, inFrame))
+
 	}
-	//outDescs = outDescs[:len(inDescs)]
 
-	//output.Transmit(outDescs)
 
-	return
+	return 
 }
 
-/*func replaceDstMac(xsk *xdp.Socket, descs []xdp.Desc, dstMac net.HardwareAddr) {
-	for _, d := range descs {
-		frame := xsk.GetFrame(d)
-		copy(frame, dstMac)
+
+
+func forwardPacket(xsk *xdp.Socket, packet []byte, all int) (int, error) {
+
+	if xsk.NumFreeTxSlots() == 0 {
+		return -1, fmt.Errorf("no free TX slots available")
 	}
-}*/
+
+	// Allocate a descriptor for the packet.
+	descs := xsk.GetDescs(1, false) // Assuming a method to get one TX descriptor.
+	if len(descs) == 0 {
+		return -1, fmt.Errorf("failed to allocate a descriptor for the packet")
+	}
+	desc := descs[0]
+
+	// Copy the packet data into the XDP socket's UMEM frame.
+	frame := xsk.GetFrame(desc)
+	copy(frame, packet)
+	desc.Len = uint32(len(packet))
+
+	// Log packet transmission details if verbose is enabled.
+	
+	log.Printf("Sending packet: %d bytes\n", len(packet))
+	
+
+	// Enqueue the packet for transmission.
+	/*if err :=*/ 
+	xsk.Transmit(descs); 
+	/*err != 0 {
+		return fmt.Errorf("failed to enqueue packet for transmission: %v", err)
+	}*/
+
+	// Optionally, you can immediately attempt to complete pending transmissions.
+	// This step may be moved outside of this function for batch processing.
+	log.Printf("Free TX slots after transmission attempt: %d\n", xsk.NumFreeTxSlots())
+	
+    	completed := xsk.NumCompleted()
+    	all = all+1
+    	log.Printf("Packets completed: %d\nTotal sent %d\n", completed,all)
+    	xsk.Complete(completed)
+
+	return all, nil
+}
+
