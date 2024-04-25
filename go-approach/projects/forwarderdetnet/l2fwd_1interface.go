@@ -65,8 +65,12 @@ func forward(verbose bool, iface netlink.Link, interfaceQueueID int) {
 	}
 	defer inProg.Unregister(interfaceQueueID)
 
+	log.Printf("XDP deployed...")
+	detnet_init(detnetConf_path, newFlows_path)
+	log.Printf("Detnet deployed...")
+	log.Printf("Starting switch...")
 
-	log.Printf("starting Detnet...")
+
 
 	numBytesTotal := uint64(0)
 	numFramesTotal := uint64(0)
@@ -129,16 +133,18 @@ func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numF
 	numFrames = uint64(len(inDescs))
 
 	//send to detnet
-	log.Printf("Received %d frames", numFrames)
+
+	//log.Printf("Received %d frames", numFrames)
 
 	for i := 0; i < len(inDescs); i++ {
-		outFrame := output.GetFrame(outDescs[i])
 		inFrame := input.GetFrame(inDescs[i])
+		
+		outFrame := output.GetFrame(outDescs[i])
 		numBytes += uint64(len(inFrame))
 		outDescs[i].Len = uint32(copy(outFrame, inFrame))
 	}
 	outDescs = outDescs[:len(inDescs)]
-	log.Printf("Sending %d frames", numFrames)
+	//log.Printf("Sending %d frames", numFrames)
 
 	output.Transmit(outDescs)
 

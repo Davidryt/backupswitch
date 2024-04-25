@@ -1,0 +1,61 @@
+{"30": {
+    "action":"forward",
+    "L2": {
+        "src_mac":"00301808c9f148",
+        "dst_mac":"00301808afe0",
+        "flow_id":2,
+        "pcp":1
+        },
+    "L3": {
+        "src_ip":"10.10.10.4",
+        "dst_ip":"10.10.10.5"
+        },
+    "L4": {
+        "src_port":4000,
+        "dst_port":4000
+        }
+    },
+ "10": {
+    "action":"encapsulate",
+    "L2": {
+        "src_mac":"00301808c9f148",
+        "dst_mac":"00301808afe0",
+        "flow_id":3,
+        "pcp":1
+        },
+    "L3": {
+        "src_ip":"10.10.10.3",
+        "dst_ip":"10.10.10.2"
+        },
+    "L4": {
+        "src_port":4000,
+        "dst_port":4000
+        }
+    },
+ "40": {
+    "action":"encapsulate",
+    "L2": {
+        "src_mac":"00301808c9f148",
+        "dst_mac":"00301808afe0",
+        "flow_id":3,
+        "pcp":1
+        },
+    "L3": {
+        "src_ip":"10.10.10.3",
+        "dst_ip":"10.10.10.2"
+        },
+    "L4": {
+        "src_port":4000,
+        "dst_port":4000
+        }
+    },
+ "20": {
+    "action":"pop",
+    "L2": {
+        "src_mac":"00301808c9f148",
+        "dst_mac":"00301808afe0",
+        "flow_id":1,
+        "pcp":1
+        }
+    }
+}
