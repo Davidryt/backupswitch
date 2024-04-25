@@ -87,40 +87,39 @@ func forward(verbose bool, iface netlink.Link, interfaceQueueID int) {
 		}()
 	}
 
-	var fds [2]unix.PollFd
+	var fds [1]unix.PollFd
 	fds[0].Fd = int32(inXsk.FD())
+
 	for {
-		inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
+    	inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
+    	fds[0].Events = unix.POLLIN
+    	if inXsk.NumTransmitted() > 0 {
+    	    fds[0].Events |= unix.POLLOUT
+    	}
 
-		fds[0].Events = unix.POLLIN
-		if inXsk.NumTransmitted() > 0 {
-			fds[0].Events |= unix.POLLOUT
-		}
+    	fds[0].Revents = 0
+    	_, err := unix.Poll(fds[:], -1)
+    	if err == syscall.EINTR {
+        	continue
+    	} else if err != nil {
+    	    fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
+    	    os.Exit(1)
+    	}
 
-		fds[0].Revents = 0
-		_, err := unix.Poll(fds[:], -1)
-		if err == syscall.EINTR {
-			// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
-			continue
-		} else if err != nil {
-			fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
-			os.Exit(1)
-		}
-
-		if (fds[0].Revents & unix.POLLIN) != 0 {
-			numBytes, numFrames := forwardFrames(inXsk, outXsk)
-			numBytesTotal += numBytes
-			numFramesTotal += numFrames
-		}
-		if (fds[0].Revents & unix.POLLOUT) != 0 {
-			inXsk.Complete(inXsk.NumCompleted())
-		}
+    	if fds[0].Revents&unix.POLLIN != 0 {
+        	numBytes, numFrames := forwardFrames(inXsk, inXsk)
+        	numBytesTotal += numBytes
+        	numFramesTotal += numFrames
+   		}
+    	if fds[0].Revents&unix.POLLOUT != 0 {
+    	    inXsk.Complete(inXsk.NumCompleted())
+    	}
 	}
 }
 
 func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
+	log.Printf("Forwarding")
 	inDescs := input.Receive(input.NumReceived())
-	//replaceDstMac(input, inDescs, dstMac)
 
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 
@@ -129,6 +128,9 @@ func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numF
 	}
 	numFrames = uint64(len(inDescs))
 
+	//send to detnet
+	log.Printf("Received %d frames", numFrames)
+
 	for i := 0; i < len(inDescs); i++ {
 		outFrame := output.GetFrame(outDescs[i])
 		inFrame := input.GetFrame(inDescs[i])
@@ -136,6 +138,7 @@ func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numF
 		outDescs[i].Len = uint32(copy(outFrame, inFrame))
 	}
 	outDescs = outDescs[:len(inDescs)]
+	log.Printf("Sending %d frames", numFrames)
 
 	output.Transmit(outDescs)
 
