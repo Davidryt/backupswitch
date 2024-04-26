@@ -4,8 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	//"net"
+	"net"
 	"os"
+	"os/signal"
 	"syscall"
 	"time"
 
@@ -66,7 +67,9 @@ func forward(verbose bool, iface netlink.Link, interfaceQueueID int) {
 	defer inProg.Unregister(interfaceQueueID)
 
 	log.Printf("XDP deployed...")
-	detnet_init(detnetConf_path, newFlows_path)
+	//detnetConf_path = "./config/detnetData.json"
+	//newFlows_path = "./config/newFlows.json"
+	detnet_init("./config/detnetData.json", "./config/newFlows.json")
 	log.Printf("Detnet deployed...")
 	log.Printf("Starting switch...")
 
@@ -91,19 +94,46 @@ func forward(verbose bool, iface netlink.Link, interfaceQueueID int) {
 		}()
 	}
 
+
+	// Remove the XDP BPF program on interrupt.
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		inProg.Detach(iface.Attrs().Index)
+		os.Exit(1)
+	}()
+
+	/*for {
+		inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(),true))
+		numRx, _, err := inXsk.Poll(-1)
+		if err != nil {
+			panic(err)
+		}
+		forwardFrames(inXsk, inXsk, numRx)
+	}*/
+
+
 	var fds [1]unix.PollFd
 	fds[0].Fd = int32(inXsk.FD())
+	log.Printf("Empieza loop")
 
 	for {
+		log.Printf("Hola")
+		log.Printf("Free %d", inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
+		log.Printf("Num transmitted %d", inXsk.NumTransmitted())
     	inXsk.Fill(inXsk.GetDescs(inXsk.NumFreeFillSlots(), true))
+		log.Printf("Fill done")
     	fds[0].Events = unix.POLLIN
     	if inXsk.NumTransmitted() > 0 {
+			log.Printf("Transimitir")
     	    fds[0].Events |= unix.POLLOUT
     	}
 
     	fds[0].Revents = 0
     	_, err := unix.Poll(fds[:], -1)
     	if err == syscall.EINTR {
+			log.Printf("ERROR")
         	continue
     	} else if err != nil {
     	    fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
@@ -111,15 +141,47 @@ func forward(verbose bool, iface netlink.Link, interfaceQueueID int) {
     	}
 
     	if fds[0].Revents&unix.POLLIN != 0 {
+			log.Printf("fOWARD")
         	numBytes, numFrames := forwardFrames(inXsk, inXsk)
         	numBytesTotal += numBytes
         	numFramesTotal += numFrames
    		}
     	if fds[0].Revents&unix.POLLOUT != 0 {
+			log.Printf("Transimitir2")
     	    inXsk.Complete(inXsk.NumCompleted())
     	}
 	}
 }
+
+/*func forwardFrames(input *xdp.Socket, output *xdp.Socket, numRx int) (numBytes uint64, numFrames uint64) {
+	log.Printf("Forwarding")
+	inDescs := input.Receive(numRx)
+
+	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
+
+	if len(inDescs) > len(outDescs) {
+		inDescs = inDescs[:len(outDescs)]
+	}
+	numFrames = uint64(len(inDescs))
+
+	//send to detnet
+
+	log.Printf("Received %d frames", numFrames)
+
+	for i := 0; i < len(inDescs); i++ {
+		inFrame := input.GetFrame(inDescs[i])
+		Frame2send:= detnet(inFrame)
+		outFrame := output.GetFrame(outDescs[i])
+		numBytes += uint64(len(Frame2send))
+		outDescs[i].Len = uint32(copy(outFrame, Frame2send))
+	}
+	outDescs = outDescs[:len(inDescs)]
+	log.Printf("Sending %d frames", numFrames)
+
+	output.Transmit(outDescs)
+
+	return
+}*/
 
 func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numFrames uint64) {
 	log.Printf("Forwarding")
@@ -134,17 +196,17 @@ func forwardFrames(input *xdp.Socket, output *xdp.Socket) (numBytes uint64, numF
 
 	//send to detnet
 
-	//log.Printf("Received %d frames", numFrames)
+	log.Printf("Received %d frames", numFrames)
 
 	for i := 0; i < len(inDescs); i++ {
 		inFrame := input.GetFrame(inDescs[i])
-		
+		Frame2send:= detnet(inFrame)
 		outFrame := output.GetFrame(outDescs[i])
-		numBytes += uint64(len(inFrame))
-		outDescs[i].Len = uint32(copy(outFrame, inFrame))
+		numBytes += uint64(len(Frame2send))
+		outDescs[i].Len = uint32(copy(outFrame, Frame2send))
 	}
 	outDescs = outDescs[:len(inDescs)]
-	//log.Printf("Sending %d frames", numFrames)
+	log.Printf("Sending %d frames", numFrames)
 
 	output.Transmit(outDescs)
 

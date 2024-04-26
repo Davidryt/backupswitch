@@ -4,7 +4,8 @@
         "src_mac":"00301808c9f148",
         "dst_mac":"00301808afe0",
         "flow_id":2,
-        "pcp":1
+        "pcp":1,
+	"vlan":"true"
         },
     "L3": {
         "src_ip":"10.10.10.4",
@@ -18,11 +19,12 @@
  "10": {
     "action":"encapsulate",
     "L2": {
-        "src_mac":"00301808c9f148",
-        "dst_mac":"00301808afe0",
+        "src_mac":"70f8e7d02467",
+        "dst_mac":"b44506aee3ac",
         "flow_id":3,
-        "pcp":1
-        },
+        "pcp":1,
+        "vlan":"false"
+       },
     "L3": {
         "src_ip":"10.10.10.3",
         "dst_ip":"10.10.10.2"
@@ -38,7 +40,8 @@
         "src_mac":"00301808c9f148",
         "dst_mac":"00301808afe0",
         "flow_id":3,
-        "pcp":1
+        "pcp":1,
+        "vlan":"true"
         },
     "L3": {
         "src_ip":"10.10.10.3",
@@ -55,7 +58,8 @@
         "src_mac":"00301808c9f148",
         "dst_mac":"00301808afe0",
         "flow_id":1,
-        "pcp":1
+        "pcp":1,
+        "vlan":"true"
         }
     }
 }

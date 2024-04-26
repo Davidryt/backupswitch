@@ -19,13 +19,18 @@ const slabel_offset int = L2_size + L3_size + L4_size
 const vlan_offset int = L2_size - 4
 const iplen_offset_1 int = L2_size + 2
 const iplen_offset_2 int = L2_size + 3
+const ipChkSm_offset_1 int = L2_size + 10
+const ipChkSm_offset_2 int = L2_size + 11
+const udplen_offset_1 int = L2_size + L3_size + 4
+const udplen_offset_2 int = L2_size + L3_size + 5
 const header_len = L2_size + L3_size + L4_size + MPLS_size
 
 type L2_info struct {
-	Src string `json:"src_mac,omitempty"`
-	Dst string `json:"dst_mac,omitempty"`
-	Vid uint16 `json:"flow_id"`
-	Pcp uint8  `json:"pcp"`
+	Src string  `json:"src_mac,omitempty"`
+	Dst string  `json:"dst_mac,omitempty"`
+	Vid uint16  `json:"flow_id"`
+	Pcp uint8   `json:"pcp"`
+	Vlan string `json:"vlan,omitempty"`
 }
 type L3_info struct {
 	Src string `json:"src_ip"`
@@ -49,8 +54,12 @@ func L2_header(data L2_info) []byte {
 	dst, _ := hex.DecodeString(data.Dst)
 	b := make([]byte, 2)
 	binary.BigEndian.PutUint16(b, uint16(a))
-	return append(src, append(dst, append([]byte{0x81, 0x00},
-		append(b, []byte{0x08, 0x00}...)...)...)...)
+	if data.Vlan == "true"{
+		return append(src, append(dst, append([]byte{0x81, 0x00},
+			append(b, []byte{0x08, 0x00}...)...)...)...)
+	} else {
+		return append(src, append(dst, []byte{0x08, 0x00}...)...)
+	}
 }
 func L3_header(data L3_info) []byte {
 	return append([]byte{0x45, 0x00, 0x00, 0x00,
@@ -81,6 +90,24 @@ func MPLS_seqnum() []byte {
 	return b
 }
 
+func calculateChecksum(data []byte) uint16 {
+    var sum uint32
+    // Sum up 16-bit words
+    for i := 0; i < len(data); i += 2 {
+        if i+1 < len(data) {
+            sum += uint32(data[i])<<8 + uint32(data[i+1])
+        } else {
+            sum += uint32(data[i]) << 8 // In case of odd length
+        }
+    }
+    // Add the carries
+    for (sum >> 16) > 0 {
+        sum = (sum & 0xFFFF) + (sum >> 16)
+    }
+    // Return the one's complement of sum
+    return uint16(^sum)
+}
+
 func parseIPv4addr(addr string) []byte {
 	a := strings.Split(addr, ".")
 	b := make([]byte, 4)
@@ -97,21 +124,47 @@ var actions = make(map[[2]byte]string)
 var newFlows = make(map[[2]byte][2]byte)
 
 func detnet(packet []byte) []byte {
-	slabel := [2]byte(packet[slabel_offset : slabel_offset+2])
-	switch actions[slabel] {
-	case "forward":
-		headers[slabel][iplen_offset_1] = packet[iplen_offset_1]
-		headers[slabel][iplen_offset_2] = packet[iplen_offset_2]
-		return append(headers[slabel][:slabel_offset], packet[slabel_offset:]...)
-	case "pop":
-		return append(headers[slabel], packet[header_len:]...)
-	default:
-		slabel, ok := newFlows[[2]byte(packet[vlan_offset:vlan_offset+2])]
-		if ok {
-			return append(headers[slabel], packet[L2_size:]...)
-		}
-	}
-	return nil
+    var slabel [2]byte
+    copy(slabel[:], packet[slabel_offset:slabel_offset+2])
+    
+    switch actions[slabel] {
+    case "forward":
+        headers[slabel][iplen_offset_1] = packet[iplen_offset_1]
+        headers[slabel][iplen_offset_2] = packet[iplen_offset_2]
+        return append(headers[slabel][:slabel_offset], packet[slabel_offset:]...)
+    case "pop":
+        return append(headers[slabel], packet[header_len:]...)
+    default:
+        var flow [2]byte
+        copy(flow[:], packet[vlan_offset:vlan_offset+2])
+        slabel, ok := newFlows[flow]
+        if ok {
+			if len(headers[slabel]) == header_len {
+				udp_length := uint16(L4_size + MPLS_size + len(packet[L2_size:]))
+				bin_udp_length := make([]byte, 2)
+				binary.BigEndian.PutUint16(bin_udp_length, udp_length)
+				out := append(headers[slabel][:udplen_offset_1], append(bin_udp_length, append(headers[slabel][udplen_offset_2+1:], 
+					packet[L2_size:]...)...)...)
+				chkSm := calculateChecksum(out[L2_size:])
+				bin_chkSm := make([]byte, 2)
+				binary.BigEndian.PutUint16(bin_chkSm, chkSm)
+				out = append(out[:ipChkSm_offset_1], append(bin_chkSm, out[ipChkSm_offset_2+1:]...)...)
+				return out
+			} else {
+				udp_length := uint16(L4_size + MPLS_size + len(packet[L2_size:]))
+				bin_udp_length := make([]byte, 2)
+				binary.BigEndian.PutUint16(bin_udp_length, udp_length)
+				out := append(headers[slabel][:udplen_offset_1-4], append(bin_udp_length, append(headers[slabel][udplen_offset_2-3:], 
+					packet[L2_size:]...)...)...)
+				chkSm := calculateChecksum(out[L2_size-4:])
+				bin_chkSm := make([]byte, 2)
+				binary.BigEndian.PutUint16(bin_chkSm, chkSm)
+				out = append(out[:ipChkSm_offset_1-4], append(bin_chkSm, out[ipChkSm_offset_2-3:]...)...)
+				return out
+			}
+			}
+    }
+    return nil
 }
 
 func detnet_init(detnetConf_path string, newFlows_path string) bool {
@@ -124,9 +177,9 @@ func detnet_init(detnetConf_path string, newFlows_path string) bool {
 	json.Unmarshal(detnetConf_file, &services)
 	fmt.Println(services)
 	for k, v := range services {
-		b := make([]byte, 2)
-		c, _ := strconv.Atoi(k)
-		binary.BigEndian.PutUint16(b, uint16(c))
+        var b [2]byte
+        c, _ := strconv.Atoi(k)
+        binary.BigEndian.PutUint16(b[:], uint16(c))
 		switch v.Action {
 		case "encapsulate":
 			headers[[2]byte(b)] = append(L2_header(v.L2), append(L3_header(v.L3),
@@ -144,15 +197,15 @@ func detnet_init(detnetConf_path string, newFlows_path string) bool {
 	flows := make(map[string]string)
 	fmt.Println("Successfully Opened " + detnetConf_path)
 	json.Unmarshal(flows_file, &flows)
-	for k, v := range flows {
-		flow := make([]byte, 2)
-		f, _ := strconv.Atoi(k)
-		binary.BigEndian.PutUint16(flow, uint16(f))
-		slabel := make([]byte, 2)
-		s, _ := strconv.Atoi(v)
-		binary.BigEndian.PutUint16(slabel, uint16(s))
-		newFlows[[2]byte(flow)] = [2]byte(slabel)
-	}
+	 for k, v := range flows {
+        var flow [2]byte
+        f, _ := strconv.Atoi(k)
+        binary.BigEndian.PutUint16(flow[:], uint16(f))
+        var slabel [2]byte
+        s, _ := strconv.Atoi(v)
+        binary.BigEndian.PutUint16(slabel[:], uint16(s))
+        newFlows[flow] = slabel
+    }
 
 	fmt.Println(headers)
 	fmt.Println(actions)
