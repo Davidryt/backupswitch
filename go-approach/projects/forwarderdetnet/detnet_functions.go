@@ -15,6 +15,8 @@ const L3_size = 20
 const L4_size = 8
 const MPLS_size = 8
 
+const nxheadL2_offset_1 int = 12
+const nxheadL2_offset_2 int = 13
 const slabel_offset int = L2_size + L3_size + L4_size
 const vlan_offset int = L2_size - 4
 const iplen_offset_1 int = L2_size + 2
@@ -125,13 +127,26 @@ var newFlows = make(map[[2]byte][2]byte)
 
 func detnet(packet []byte) []byte {
     var slabel [2]byte
-    copy(slabel[:], packet[slabel_offset:slabel_offset+2])
+    var off int
+    if packet[nxheadL2_offset_1] == byte{0x81} && packet[nxheadL2_offset_2] == byte{0x00} {
+    	copy(slabel[:], packet[slabel_offset:slabel_offset+2])
+	off = 0
+    } else {
+	copy(slabel[:], packet[slabel_offset-4:slabel_offset-2])
+	off = 4
+    }
     
     switch actions[slabel] {
     case "forward":
-        headers[slabel][iplen_offset_1] = packet[iplen_offset_1]
-        headers[slabel][iplen_offset_2] = packet[iplen_offset_2]
-        return append(headers[slabel][:slabel_offset], packet[slabel_offset:]...)
+	if len(headers[slabel]) == header_len {
+        	headers[slabel][iplen_offset_1] = packet[iplen_offset_1-off]
+        	headers[slabel][iplen_offset_2] = packet[iplen_offset_2-off]
+        	return append(headers[slabel][:slabel_offset], packet[slabel_offset-off:]...)
+	} else {
+                headers[slabel][iplen_offset_1-4] = packet[iplen_offset_1-off]
+                headers[slabel][iplen_offset_2-4] = packet[iplen_offset_2-off]
+                return append(headers[slabel][:slabel_offset-4], packet[slabel_offset-off:]...)
+	}
     case "pop":
         return append(headers[slabel], packet[header_len:]...)
     default:
