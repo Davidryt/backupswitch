@@ -55,10 +55,10 @@ func L2_header(data L2_info) []byte {
 	b := make([]byte, 2)
 	binary.BigEndian.PutUint16(b, uint16(a))
 	if data.Vlan == "true"{
-		return append(src, append(dst, append([]byte{0x81, 0x00},
+		return append(dst, append(src, append([]byte{0x81, 0x00},
 			append(b, []byte{0x08, 0x00}...)...)...)...)
 	} else {
-		return append(src, append(dst, []byte{0x08, 0x00}...)...)
+		return append(dst, append(src, []byte{0x08, 0x00}...)...)
 	}
 }
 func L3_header(data L3_info) []byte {
@@ -140,26 +140,40 @@ func detnet(packet []byte) []byte {
         slabel, ok := newFlows[flow]
         if ok {
 			if len(headers[slabel]) == header_len {
+				ip_length := uint16(L3_size + L4_size + MPLS_size + len(packet[L2_size:]))
+				bin_ip_length := make([]byte, 2)
+				binary.BigEndian.PutUint16(bin_ip_length, ip_length)
 				udp_length := uint16(L4_size + MPLS_size + len(packet[L2_size:]))
 				bin_udp_length := make([]byte, 2)
 				binary.BigEndian.PutUint16(bin_udp_length, udp_length)
-				out := append(headers[slabel][:udplen_offset_1], append(bin_udp_length, append(headers[slabel][udplen_offset_2+1:], 
-					packet[L2_size:]...)...)...)
+				out := append(headers[slabel], packet[L2_size:]...)
+				out[iplen_offset_1] = bin_ip_length[0]; out[iplen_offset_2] = bin_ip_length[1]
+                                out[udplen_offset_1] = bin_udp_length[0]; out[udplen_offset_2] = bin_udp_length[1]
+				//out := append(headers[slabel][:udplen_offset_1], append(bin_udp_length, append(headers[slabel][udplen_offset_2+1:], 
+				//	packet[L2_size:]...)...)...)
 				chkSm := calculateChecksum(out[L2_size:])
 				bin_chkSm := make([]byte, 2)
 				binary.BigEndian.PutUint16(bin_chkSm, chkSm)
-				out = append(out[:ipChkSm_offset_1], append(bin_chkSm, out[ipChkSm_offset_2+1:]...)...)
+				out[ipChkSm_offset_1] = bin_chkSm[0]; out[ipChkSm_offset_2] = bin_chkSm[1]
+				//out = append(out[:ipChkSm_offset_1], append(bin_chkSm, out[ipChkSm_offset_2+1:]...)...)
 				return out
 			} else {
+                                ip_length := uint16(L3_size + L4_size + MPLS_size + len(packet[L2_size:]))
+                                bin_ip_length := make([]byte, 2)
+                                binary.BigEndian.PutUint16(bin_ip_length, ip_length)
 				udp_length := uint16(L4_size + MPLS_size + len(packet[L2_size:]))
 				bin_udp_length := make([]byte, 2)
 				binary.BigEndian.PutUint16(bin_udp_length, udp_length)
-				out := append(headers[slabel][:udplen_offset_1-4], append(bin_udp_length, append(headers[slabel][udplen_offset_2-3:], 
-					packet[L2_size:]...)...)...)
-				chkSm := calculateChecksum(out[L2_size-4:])
-				bin_chkSm := make([]byte, 2)
+                                out := append(headers[slabel], packet[L2_size:]...)
+                                out[iplen_offset_1-4] = bin_ip_length[0]; out[iplen_offset_2-4] = bin_ip_length[1]
+                                out[udplen_offset_1-4] = bin_udp_length[0]; out[udplen_offset_2-4] = bin_udp_length[1]
+				//out := append(headers[slabel][:udplen_offset_1-4], append(bin_udp_length, append(headers[slabel][udplen_offset_2-3:], 
+				//	packet[L2_size:]...)...)...)
+				chkSm := calculateChecksum(out[L2_size-4:L2_size+L3_size-4])
+				bin_chkSm := make([]byte, 2) //[2]byte{0x24, 0x75} //make([]byte, 2)
 				binary.BigEndian.PutUint16(bin_chkSm, chkSm)
-				out = append(out[:ipChkSm_offset_1-4], append(bin_chkSm, out[ipChkSm_offset_2-3:]...)...)
+                                out[ipChkSm_offset_1-4] = bin_chkSm[0]; out[ipChkSm_offset_2-4] = bin_chkSm[1]
+				//out = append(out[:ipChkSm_offset_1-4], append(bin_chkSm, out[ipChkSm_offset_2-3:]...)...)
 				return out
 			}
 			}
