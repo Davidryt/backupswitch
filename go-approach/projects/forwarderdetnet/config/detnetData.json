@@ -1,51 +1,15 @@
-{"30": {
-    "action":"forward",
-    "L2": {
-        "src_mac":"00301808c9f148",
-        "dst_mac":"00301808afe0",
-        "flow_id":2,
-        "pcp":1,
-	"vlan":"true"
-        },
-    "L3": {
-        "src_ip":"10.10.10.4",
-        "dst_ip":"10.10.10.5"
-        },
-    "L4": {
-        "src_port":4000,
-        "dst_port":4000
-        }
-    },
- "10": {
+{"10": {
     "action":"encapsulate",
     "L2": {
         "src_mac":"70f8e7d02467",
         "dst_mac":"b44506aee3ac",
-        "flow_id":3,
-        "pcp":1,
-        "vlan":"false"
-       },
-    "L3": {
-        "src_ip":"10.10.10.3",
-        "dst_ip":"10.10.10.2"
-        },
-    "L4": {
-        "src_port":4000,
-        "dst_port":4000
-        }
-    },
- "40": {
-    "action":"encapsulate",
-    "L2": {
-        "src_mac":"00301808c9f148",
-        "dst_mac":"00301808afe0",
-        "flow_id":3,
-        "pcp":1,
-        "vlan":"true"
+        "flow_id":11,
+        "pcp":0,
+	"vlan":"false"
         },
     "L3": {
-        "src_ip":"10.10.10.3",
-        "dst_ip":"10.10.10.2"
+        "src_ip":"10.0.1.2",
+        "dst_ip":"10.0.1.5"
         },
     "L4": {
         "src_port":4000,
@@ -53,13 +17,22 @@
         }
     },
  "20": {
-    "action":"pop",
+    "action":"encapsulate",
     "L2": {
-        "src_mac":"00301808c9f148",
-        "dst_mac":"00301808afe0",
-        "flow_id":1,
-        "pcp":1,
-        "vlan":"true"
+        "src_mac":"70f8e7d02467",
+        "dst_mac":"b44506aee3ac",
+        "flow_id":21,
+        "pcp":7,
+        "vlan":"false"
+       },
+    "L3": {
+        "src_ip":"10.0.1.2",
+        "dst_ip":"10.0.1.5"
+        },
+    "L4": {
+        "src_port":4000,
+        "dst_port":4000
         }
     }
 }
+
