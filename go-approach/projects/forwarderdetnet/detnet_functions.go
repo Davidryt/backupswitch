@@ -63,8 +63,11 @@ func L2_header(data L2_info) []byte {
 		return append(dst, append(src, []byte{0x08, 0x00}...)...)
 	}
 }
-func L3_header(data L3_info) []byte {
-	return append([]byte{0x45, 0x00, 0x00, 0x00,
+func L3_header(data L3_info, tos uint8) []byte {
+	//a, _ := strconv.ParseInt(strconv.FormatInt(int64(data.tos), 2)+
+        //        strconv.FormatInt(int64(data.Pcp), 2), 2, 16)
+	//bin_tos := make([]byte, 1)
+	return append([]byte{0x45, tos, 0x00, 0x00,
 		0x00, 0x00, 0x40, 0x00,
 		0x40, 0x11, 0x00, 0x00},
 		append(parseIPv4addr(data.Src),
@@ -128,12 +131,13 @@ var newFlows = make(map[[2]byte][2]byte)
 func detnet(packet []byte) []byte {
     var slabel [2]byte
     var off int
-    if packet[nxheadL2_offset_1] == byte{0x81} && packet[nxheadL2_offset_2] == byte{0x00} {
+    if packet[nxheadL2_offset_1] == 0x81 && packet[nxheadL2_offset_2] == 0x00 {
     	copy(slabel[:], packet[slabel_offset:slabel_offset+2])
 	off = 0
     } else {
 	copy(slabel[:], packet[slabel_offset-4:slabel_offset-2])
 	off = 4
+	//fmt.Println(actions[slabel])
     }
     
     switch actions[slabel] {
@@ -148,7 +152,12 @@ func detnet(packet []byte) []byte {
                 return append(headers[slabel][:slabel_offset-4], packet[slabel_offset-off:]...)
 	}
     case "pop":
-        return append(headers[slabel], packet[header_len:]...)
+		//fmt.Println("yupi")
+	if len(headers[slabel]) == L2_size {
+        	return append(headers[slabel], packet[header_len:]...)
+	} else {
+		return append(headers[slabel], packet[header_len-4:]...)
+	}
     default:
         var flow [2]byte
         copy(flow[:], packet[vlan_offset:vlan_offset+2])
@@ -161,7 +170,7 @@ func detnet(packet []byte) []byte {
 				udp_length := uint16(L4_size + MPLS_size + len(packet[L2_size:]))
 				bin_udp_length := make([]byte, 2)
 				binary.BigEndian.PutUint16(bin_udp_length, udp_length)
-				out := append(headers[slabel], packet[L2_size:]...)
+				out := append(headers[slabel][:slabel_offset+4], append(MPLS_seqnum(), packet[L2_size:]...)...)
 				out[iplen_offset_1] = bin_ip_length[0]; out[iplen_offset_2] = bin_ip_length[1]
                                 out[udplen_offset_1] = bin_udp_length[0]; out[udplen_offset_2] = bin_udp_length[1]
 				//out := append(headers[slabel][:udplen_offset_1], append(bin_udp_length, append(headers[slabel][udplen_offset_2+1:], 
@@ -171,7 +180,7 @@ func detnet(packet []byte) []byte {
 				binary.BigEndian.PutUint16(bin_chkSm, chkSm)
 				out[ipChkSm_offset_1] = bin_chkSm[0]; out[ipChkSm_offset_2] = bin_chkSm[1]
 				//out = append(out[:ipChkSm_offset_1], append(bin_chkSm, out[ipChkSm_offset_2+1:]...)...)
-				return out
+				return out // Hay que añadir el seq num
 			} else {
                                 ip_length := uint16(L3_size + L4_size + MPLS_size + len(packet[L2_size:]))
                                 bin_ip_length := make([]byte, 2)
@@ -179,7 +188,7 @@ func detnet(packet []byte) []byte {
 				udp_length := uint16(L4_size + MPLS_size + len(packet[L2_size:]))
 				bin_udp_length := make([]byte, 2)
 				binary.BigEndian.PutUint16(bin_udp_length, udp_length)
-                                out := append(headers[slabel], packet[L2_size:]...)
+                                out := append(headers[slabel][:slabel_offset], append(MPLS_seqnum(), packet[L2_size-4:]...)...)
                                 out[iplen_offset_1-4] = bin_ip_length[0]; out[iplen_offset_2-4] = bin_ip_length[1]
                                 out[udplen_offset_1-4] = bin_udp_length[0]; out[udplen_offset_2-4] = bin_udp_length[1]
 				//out := append(headers[slabel][:udplen_offset_1-4], append(bin_udp_length, append(headers[slabel][udplen_offset_2-3:], 
@@ -211,11 +220,11 @@ func detnet_init(detnetConf_path string, newFlows_path string) bool {
         binary.BigEndian.PutUint16(b[:], uint16(c))
 		switch v.Action {
 		case "encapsulate":
-			headers[[2]byte(b)] = append(L2_header(v.L2), append(L3_header(v.L3),
+			headers[[2]byte(b)] = append(L2_header(v.L2), append(L3_header(v.L3,v.L2.Pcp),
 				append(L4_header(v.L4), append(MPLS_slabel(uint16(c)), []byte{0, 0, 0, 0}...)...)...)...)
 		case "forward":
 			actions[[2]byte(b)] = "forward"
-			headers[[2]byte(b)] = append(L2_header(v.L2), append(L3_header(v.L3),
+			headers[[2]byte(b)] = append(L2_header(v.L2), append(L3_header(v.L3,v.L2.Pcp),
 				append(L4_header(v.L4), append(MPLS_slabel(uint16(c)), []byte{0, 0, 0, 0}...)...)...)...)
 		case "pop":
 			actions[[2]byte(b)] = "pop"
