@@ -1,0 +1,37 @@
+{"10": {
+    "action":"forward",
+    "L2": {
+        "src_mac":"70f8e7d02439",
+        "dst_mac":"70f8e7d0244b",
+        "flow_id":13,
+        "pcp":0,
+        "vlan":"true"
+        },
+    "L3": {
+        "src_ip":"10.0.1.6",
+        "dst_ip":"10.0.1.11"
+        },
+    "L4": {
+        "src_port":4000,
+        "dst_port":4000
+        }
+    },
+ "20": {
+    "action":"forward",
+    "L2": {
+        "src_mac":"70f8e7d02439",
+        "dst_mac":"70f8e7d0244b",
+        "flow_id":23,
+        "pcp":7,
+        "vlan":"true"
+       },
+    "L3": {
+        "src_ip":"10.0.1.6",
+        "dst_ip":"10.0.1.11"
+        },
+    "L4": {
+        "src_port":4000,
+        "dst_port":4000
+        }
+    }
+}
