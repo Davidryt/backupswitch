@@ -1,0 +1,103 @@
+{"10": {
+    "action":"encapsulate",
+    "L2": {
+        "src_mac":"70f8e7d02467",
+        "dst_mac":"b44506aee3ac",
+        "flow_id":11,
+        "pcp":0,
+	"vlan":"false"
+        },
+    "L3": {
+        "src_ip":"10.0.1.2",
+        "dst_ip":"10.0.1.5"
+        },
+    "L4": {
+        "src_port":5000,
+        "dst_port":10000
+        }
+    },
+ "20": {
+   "action":"forward",
+   "L2": {
+       "src_mac":"70f8e7d0244a",
+       "dst_mac":"70f8e7d02439",
+       "flow_id":12,
+       "pcp":0,
+	   "vlan":"true"
+       },
+   "L3": {
+       "src_ip":"10.0.1.5",
+       "dst_ip":"10.0.1.6"
+       },
+   "L4": {
+       "src_port":4000,
+       "dst_port":4000
+       }
+   },
+"30": {
+   "action":"pop",
+   "L2": {
+       "src_mac":"70f8e7d0244a",
+       "dst_mac":"70f8e7d02439",
+       "flow_id":12,
+       "pcp":0,
+	   "vlan":"true"
+       }
+   },
+"40_1": {
+    "action":"replicate",
+    "L2": {
+        "src_mac":"70f8e7d0244a",
+        "dst_mac":"70f8e7d02439",
+        "flow_id":12,
+        "pcp":0,
+        "vlan":"true"
+        },
+    "L3": {
+        "src_ip":"10.0.1.5",
+        "dst_ip":"10.0.1.6"
+        },
+    "L4": {
+        "src_port":4000,
+        "dst_port":4000
+        }
+    },
+"40_2": {
+    "action":"replicate",
+    "L2": {
+        "src_mac":"70f8e7d0244a",
+        "dst_mac":"70f8e7d02439",
+        "flow_id":12,
+        "pcp":0,
+        "vlan":"true"
+        },
+    "L3": {
+        "src_ip":"10.0.1.5",
+        "dst_ip":"10.0.1.6"
+        },
+    "L4": {
+        "src_port":4000,
+        "dst_port":4000
+        }
+    },      
+"50": {
+   "action":"eliminate",
+   "maxRep":2,
+   "L2": {
+       "src_mac":"70f8e7d0244a",
+       "dst_mac":"70f8e7d02439",
+       "flow_id":12,
+       "pcp":0,
+	   "vlan":"true"
+       },
+   "L3": {
+       "src_ip":"10.0.1.5",
+       "dst_ip":"10.0.1.6"
+       },
+   "L4": {
+       "src_port":4000,
+       "dst_port":4000
+       }
+   }
+}
+
