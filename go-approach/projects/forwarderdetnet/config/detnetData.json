@@ -1,11 +1,11 @@
 {"10": {
     "action":"encapsulate",
     "L2": {
-        "src_mac":"70f8e7d02467",
-        "dst_mac":"b44506aee3ac",
-        "flow_id":11,
+        "src_mac":"003018c8d389",
+        "dst_mac":"00301808b025",
+        "flow_id":10,
         "pcp":0,
-	"vlan":"false"
+	"vlan":"true"
         },
     "L3": {
         "src_ip":"10.0.1.2",

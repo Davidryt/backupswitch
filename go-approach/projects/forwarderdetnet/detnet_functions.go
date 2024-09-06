@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	//"log"
 	"strconv"
 	"strings"
 )
@@ -204,6 +205,7 @@ func detnet(packet []byte) []byte {
 		var flow [2]byte
 		copy(flow[:], packet[vlan_offset:vlan_offset+2])
 		slabel, ok := newFlows[flow]
+		//log.Printf("label: %d", flow)
 		if ok {
 			if len(headers[slabel]) == header_len {
 				ip_length := uint16(L3_size + L4_size + MPLS_size + len(packet[L2_size:]))
@@ -250,7 +252,7 @@ func detnet(packet []byte) []byte {
 			}
 		}
 	}
-	return nil
+	return packet
 }
 
 func detnet_init(detnetConf_path string, newFlows_path string) bool {
