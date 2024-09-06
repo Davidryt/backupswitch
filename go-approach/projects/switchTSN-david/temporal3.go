@@ -358,10 +358,13 @@ func forwardFrames4(input *xdp.Socket, output *xdp.Socket, packetQueues *PacketQ
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 	for i := 0; i < len(inDescs); i++ {
 		inFrame := input.GetFrame(inDescs[i])
+		//log.Printf("inframe: %d", inFrame)
 		enqueueframe(inFrame, packetQueues)
 	}
 
 	sendFrames, prio := getFrames2Send(packetQueues, len(outDescs))
+	//log.Printf("tosend: %d", sendFrames)
+	
 
 	numFrames = uint64(len(sendFrames))
 
@@ -402,6 +405,7 @@ func enqueueframe(frame []byte, packetQueues *PacketQueue) error {
 
 	queueIndex := priority - 1 // Ajusta el índice de la cola si es necesario
 	// Verifica que la prioridad sea válida y que la cola exista
+	//log.Printf("Almacenando en prio %d", queueIndex)
 	if queueIndex >= 0 && queueIndex < len(packetQueues.Queues) {
 		//log.Printf("Almacenando")
 		packetQueues.AddPacket(queueIndex, frame)
@@ -455,7 +459,8 @@ func getPriority(frame []byte) (int, error) {
 		if err != nil {
 			return -1, err
 		}
-		priority = vlanID
+		//log.Printf("VLAN DETECTED: %d", vlanID)
+		priority = vlanID-9
 	} else {
 		// Asignar una prioridad por defecto a paquetes que no son VLAN
 		priority = 1 // defaultPriority es un valor que debes definir

@@ -57,47 +57,38 @@ func (pq *PacketQueue) GetPackets(queueIndex int) [][]byte {
 //	__________________________________________  MAIN  __________________________________________
 
 func main() {
-	var iface1Name string
-	var iface1QueueID int
-	var iface2Name string
-	var iface2QueueID int
-	var iface3Name string
-	var iface3QueueID int
+	var inLinkName string
+	var inLinkQueueID int
+	var outLinkName string
+	var outLinkQueueID int
 	var queues int
 	var verbose bool
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s -iface1 <network link name> -iface2 <network link name> -queues <number of queues>\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s -inlink <network link name> -outlink <network link name> -queues <number of queues>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
-	flag.StringVar(&iface1Name, "iface1", "", "Input network link name.")
-	flag.IntVar(&iface1QueueID, "iface1queue", 0, "The queue ID to attach to on input link.")
-	flag.StringVar(&iface2Name, "iface2", "", "Output network link name.")
-	flag.IntVar(&iface2QueueID, "iface2queue", 0, "The queue ID to attach to on output link.")
-	flag.StringVar(&iface3Name, "iface3", "", "Output network link name.")
-	flag.IntVar(&iface3QueueID, "iface3queue", 0, "The queue ID to attach to on output link.")
+	flag.StringVar(&inLinkName, "inlink", "", "Input network link name.")
+	flag.IntVar(&inLinkQueueID, "inlinkqueue", 0, "The queue ID to attach to on input link.")
+	flag.StringVar(&outLinkName, "outlink", "", "Output network link name.")
+	flag.IntVar(&outLinkQueueID, "outlinkqueue", 0, "The queue ID to attach to on output link.")
 	flag.IntVar(&queues, "queues", 0, "Number of queues (between 1 and 6).")
 	flag.BoolVar(&verbose, "verbose", false, "Output forwarding statistics.")
 	flag.Parse()
 
-	if iface1Name == "" || iface2Name == "" || iface3Name == "" || queues == 0 {
+	if inLinkName == "" || outLinkName == "" || queues == 0 {
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	iface1, err := netlink.LinkByName(iface1Name)
+	inLink, err := netlink.LinkByName(inLinkName)
 	if err != nil {
-		log.Fatalf("failed to fetch info about link %s: %v", iface1Name, err)
+		log.Fatalf("failed to fetch info about link %s: %v", inLinkName, err)
 	}
 
-	iface2, err := netlink.LinkByName(iface2Name)
+	outLink, err := netlink.LinkByName(outLinkName)
 	if err != nil {
-		log.Fatalf("failed to fetch info about link %s: %v", iface2Name, err)
-	}
-
-	iface3, err := netlink.LinkByName(iface3Name)
-	if err != nil {
-		log.Fatalf("failed to fetch info about link %s: %v", iface3Name, err)
+		log.Fatalf("failed to fetch info about link %s: %v", outLinkName, err)
 	}
 
 	if queues < 1 || queues > 6 {
@@ -108,7 +99,7 @@ func main() {
 	globalVariable = 1
 	go updateGlobalVariable(queues)
 
-	launchswitch(verbose, iface1, iface1QueueID, iface2, iface2QueueID, iface3, iface3QueueID, queues)
+	launchswitch(verbose, inLink, inLinkQueueID, outLink, outLinkQueueID, queues)
 }
 
 func updateGlobalVariable(queues int) {
@@ -128,82 +119,55 @@ func updateGlobalVariable(queues int) {
 	}
 }
 
-func launchswitch(verbose bool, iface1 netlink.Link, iface1QueueID int, iface2 netlink.Link, iface2QueueID int, iface3 netlink.Link, iface3QueueID int, queues int) {
+func launchswitch(verbose bool, inLink netlink.Link, inLinkQueueID int, outLink netlink.Link, outLinkQueueID int, queues int) {
 	//HERE WE DO INTERFACE 1
 
-	log.Printf("attaching XDP program for %s...", iface1.Attrs().Name)
+	log.Printf("attaching XDP program for %s...", inLink.Attrs().Name)
 	inProg, err := xdp.LoadProgram("ebpf.o", "xdp_redirect", "qidconf_map", "xsks_map")
 	if err != nil {
 		log.Fatalf("failed to load xdp program: %v\n", err)
 	}
 
-	if err := inProg.Attach(iface1.Attrs().Index); err != nil {
+	if err := inProg.Attach(inLink.Attrs().Index); err != nil {
 		log.Fatalf("failed to attach xdp program to interface: %v\n", err)
 	}
-	defer inProg.Detach(iface1.Attrs().Index)
-	log.Printf("opening XDP socket for %s...", iface1.Attrs().Name)
-	inXsk, err := xdp.NewSocket(iface1.Attrs().Index, iface1QueueID, nil)
+	defer inProg.Detach(inLink.Attrs().Index)
+	log.Printf("opening XDP socket for %s...", inLink.Attrs().Name)
+	inXsk, err := xdp.NewSocket(inLink.Attrs().Index, inLinkQueueID, nil)
 	if err != nil {
-		log.Fatalf("failed to open XDP socket for link %s: %v", iface1.Attrs().Name, err)
+		log.Fatalf("failed to open XDP socket for link %s: %v", inLink.Attrs().Name, err)
 	}
-	log.Printf("registering XDP socket for %s...", iface1.Attrs().Name)
-	if err := inProg.Register(iface1QueueID, inXsk.FD()); err != nil {
+	log.Printf("registering XDP socket for %s...", inLink.Attrs().Name)
+	if err := inProg.Register(inLinkQueueID, inXsk.FD()); err != nil {
 		fmt.Printf("error: failed to register socket in BPF map: %v\n", err)
 		return
 	}
-	defer inProg.Unregister(iface1QueueID)
+	defer inProg.Unregister(inLinkQueueID)
 
 	//HERE WE DO INTERFACE 2
 
-	log.Printf("attaching XDP program for %s...", iface2.Attrs().Name)
+	log.Printf("attaching XDP program for %s...", outLink.Attrs().Name)
 	outProg, err := xdp.LoadProgram("ebpf.o", "xdp_redirect", "qidconf_map", "xsks_map")
 	if err != nil {
 		log.Fatalf("failed to load xdp program: %v\n", err)
 	}
 
-	if err := outProg.Attach(iface2.Attrs().Index); err != nil {
+	if err := outProg.Attach(outLink.Attrs().Index); err != nil {
 		log.Fatalf("failed to attach xdp program to interface: %v\n", err)
 	}
-	defer outProg.Detach(iface2.Attrs().Index)
+	defer outProg.Detach(outLink.Attrs().Index)
 
-	log.Printf("opening XDP socket for %s...", iface2.Attrs().Name)
-	outXsk, err := xdp.NewSocket(iface2.Attrs().Index, iface2QueueID, nil)
+	log.Printf("opening XDP socket for %s...", outLink.Attrs().Name)
+	outXsk, err := xdp.NewSocket(outLink.Attrs().Index, outLinkQueueID, nil)
 	if err != nil {
-		log.Fatalf("failed to open XDP socket for link %s: %v", iface2.Attrs().Name, err)
+		log.Fatalf("failed to open XDP socket for link %s: %v", outLink.Attrs().Name, err)
 	}
 
-	if err := outProg.Register(iface2QueueID, outXsk.FD()); err != nil {
+	if err := outProg.Register(outLinkQueueID, outXsk.FD()); err != nil {
 		fmt.Printf("error: failed to register socket in BPF map: %v\n", err)
 		return
 	}
-	defer outProg.Unregister(iface2QueueID)
-
-	//HERE WE DO INTERFACE 3-----------------------------------------------------------------
-
-	log.Printf("attaching XDP program for %s...", iface3.Attrs().Name)
-	outProg2, err := xdp.LoadProgram("ebpf.o", "xdp_redirect", "qidconf_map", "xsks_map")
-	if err != nil {
-		log.Fatalf("failed to load xdp program: %v\n", err)
-	}
-
-	if err := outProg2.Attach(iface3.Attrs().Index); err != nil {
-		log.Fatalf("failed to attach xdp program to interface: %v\n", err)
-	}
-	defer outProg2.Detach(iface3.Attrs().Index)
-
-	log.Printf("opening XDP socket for %s...", iface3.Attrs().Name)
-	outXsk2, err := xdp.NewSocket(iface3.Attrs().Index, iface3QueueID, nil)
-	if err != nil {
-		log.Fatalf("failed to open XDP socket for link %s: %v", iface3.Attrs().Name, err)
-	}
-
-	if err := outProg2.Register(iface3QueueID, outXsk2.FD()); err != nil {
-		fmt.Printf("error: failed to register socket in BPF map: %v\n", err)
-		return
-	}
-	defer outProg2.Unregister(iface3QueueID)
-
-	//-----------------------------------------------------------------
+	defer outProg.Unregister(outLinkQueueID)
 
 	log.Printf("starting TSN Switch...")
 
@@ -230,10 +194,9 @@ func launchswitch(verbose bool, iface1 netlink.Link, iface1QueueID int, iface2 n
 		}()
 	}
 
-	var fds [3]unix.PollFd
+	var fds [2]unix.PollFd
 	fds[0].Fd = int32(inXsk.FD())
 	fds[1].Fd = int32(outXsk.FD())
-	fds[2].Fd = int32(outXsk2.FD())
 	go func() {
 		for {
 
@@ -258,47 +221,12 @@ func launchswitch(verbose bool, iface1 netlink.Link, iface1QueueID int, iface2 n
 			if (fds[0].Revents & unix.POLLIN) != 0 {
 				//storepackets(inXsk, packetQueues)
 				//numBytes, numFrames := forwardFrames(inXsk, outXsk)
-				//numBytes, numFrames := forwardFrames4(inXsk, outXsk, packetQueues)
-				numBytes, numFrames := forwardFrames5(inXsk, outXsk, outXsk2, packetQueues)
+				numBytes, numFrames := forwardFrames4(inXsk, outXsk, packetQueues)
 				numBytesTotal += numBytes
 				numFramesTotal += numFrames
 			}
 			if (fds[0].Revents & unix.POLLOUT) != 0 {
 				inXsk.Complete(inXsk.NumCompleted())
-			}
-		}
-	}()
-
-	go func() {
-		for {
-			outXsk2.Fill(outXsk2.GetDescs(outXsk2.NumFreeFillSlots(), true))
-
-			fds[2].Events = unix.POLLIN
-			if outXsk2.NumTransmitted() > 0 {
-				fds[2].Events |= unix.POLLOUT
-			}
-
-			fds[2].Revents = 0
-
-			_, err := unix.Poll(fds[:], -1)
-			if err == syscall.EINTR {
-				// EINTR is a non-fatal error that may occur due to ongoing syscalls that interrupt our poll
-				continue
-			} else if err != nil {
-				fmt.Fprintf(os.Stderr, "poll failed: %v\n", err)
-				os.Exit(1)
-			}
-
-			if (fds[2].Revents & unix.POLLIN) != 0 {
-				//storepackets(outXsk, packetQueues)
-				//numBytes, numFrames := forwardFrames(outXsk, inXsk)
-				//numBytes, numFrames := forwardFrames4(outXsk2, inXsk, packetQueues)
-				numBytes, numFrames := forwardFrames5(outXsk2, inXsk, outXsk, packetQueues)
-				numBytesTotal += numBytes
-				numFramesTotal += numFrames
-			}
-			if (fds[2].Revents & unix.POLLOUT) != 0 {
-				outXsk2.Complete(outXsk2.NumCompleted())
 			}
 		}
 	}()
@@ -325,8 +253,7 @@ func launchswitch(verbose bool, iface1 netlink.Link, iface1QueueID int, iface2 n
 		if (fds[1].Revents & unix.POLLIN) != 0 {
 			//storepackets(outXsk, packetQueues)
 			//numBytes, numFrames := forwardFrames(outXsk, inXsk)
-			//numBytes, numFrames := forwardFrames4(outXsk, inXsk, packetQueues)
-			numBytes, numFrames := forwardFrames5(outXsk, inXsk, outXsk2, packetQueues)
+			numBytes, numFrames := forwardFrames4(outXsk, inXsk, packetQueues)
 			numBytesTotal += numBytes
 			numFramesTotal += numFrames
 		}
@@ -426,15 +353,18 @@ func forwardFrames3(input *xdp.Socket, packetQueues *PacketQueue, output *xdp.So
 	return numBytes, numFrames
 }*/
 
-/*func forwardFrames4(input *xdp.Socket, output *xdp.Socket, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
+func forwardFrames4(input *xdp.Socket, output *xdp.Socket, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
 	inDescs := input.Receive(input.NumReceived())
 	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
 	for i := 0; i < len(inDescs); i++ {
 		inFrame := input.GetFrame(inDescs[i])
+		//log.Printf("inframe: %d", inFrame)
 		enqueueframe(inFrame, packetQueues)
 	}
 
 	sendFrames, prio := getFrames2Send(packetQueues, len(outDescs))
+	//log.Printf("tosend: %d", sendFrames)
+	
 
 	numFrames = uint64(len(sendFrames))
 
@@ -447,38 +377,6 @@ func forwardFrames3(input *xdp.Socket, packetQueues *PacketQueue, output *xdp.So
 	outDescs = outDescs[:len(sendFrames)]
 
 	output.Transmit(outDescs)
-
-	clearqueues(packetQueues, sendFrames, prio)
-
-	return
-}*/
-
-func forwardFrames5(input *xdp.Socket, output *xdp.Socket, output2 *xdp.Socket, packetQueues *PacketQueue) (numBytes uint64, numFrames uint64) {
-	inDescs := input.Receive(input.NumReceived())
-	outDescs := output.GetDescs(output.NumFreeTxSlots(), false)
-	outDescs2 := output2.GetDescs(output2.NumFreeTxSlots(), false)
-	for i := 0; i < len(inDescs); i++ {
-		inFrame := input.GetFrame(inDescs[i])
-		enqueueframe(inFrame, packetQueues)
-	}
-
-	sendFrames, prio := getFrames2Send(packetQueues, len(outDescs))
-
-	numFrames = uint64(len(sendFrames))
-
-	for i := 0; i < len(sendFrames); i++ {
-		outFrame := output.GetFrame(outDescs[i])
-		outFrame2 := output2.GetFrame(outDescs2[i])
-		inFrame := sendFrames[i]
-		numBytes += uint64(len(inFrame))
-		outDescs[i].Len = uint32(copy(outFrame, inFrame))
-		outDescs2[i].Len = uint32(copy(outFrame2, inFrame))
-	}
-	outDescs = outDescs[:len(sendFrames)]
-	outDescs2 = outDescs2[:len(sendFrames)]
-
-	output.Transmit(outDescs)
-	output2.Transmit(outDescs2)
 
 	clearqueues(packetQueues, sendFrames, prio)
 
@@ -507,6 +405,7 @@ func enqueueframe(frame []byte, packetQueues *PacketQueue) error {
 
 	queueIndex := priority - 1 // Ajusta el índice de la cola si es necesario
 	// Verifica que la prioridad sea válida y que la cola exista
+	//log.Printf("Almacenando en prio %d", queueIndex)
 	if queueIndex >= 0 && queueIndex < len(packetQueues.Queues) {
 		//log.Printf("Almacenando")
 		packetQueues.AddPacket(queueIndex, frame)
@@ -560,7 +459,8 @@ func getPriority(frame []byte) (int, error) {
 		if err != nil {
 			return -1, err
 		}
-		priority = vlanID
+		//log.Printf("VLAN DETECTED: %d", vlanID)
+		priority = vlanID-9
 	} else {
 		// Asignar una prioridad por defecto a paquetes que no son VLAN
 		priority = 1 // defaultPriority es un valor que debes definir
