@@ -149,7 +149,7 @@ func main() {
 }
 
 func updateGlobalVariable(queues int) {
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(500 * time.Nanosecond)
 	for {
 		select {
 		case <-ticker.C:
