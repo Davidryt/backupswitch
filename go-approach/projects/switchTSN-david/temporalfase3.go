@@ -148,7 +148,7 @@ func main() {
 	launchswitch(verbose, links, queues)
 }
 
-func updateGlobalVariable(queues int) {
+/*func updateGlobalVariable(queues int) {
 	ticker := time.NewTicker(500 * time.Nanosecond)
 	for {
 		select {
@@ -162,6 +162,22 @@ func updateGlobalVariable(queues int) {
 			lock.Unlock()
 		}
 	}
+}*/
+
+func updateGlobalVariable(queues int) {
+    ticker := time.NewTicker(10 * time.Millisecond)
+    for {
+        select {
+        case <-ticker.C:
+            lock.Lock()
+            // Usa el tiempo del sistema para calcular en qué ciclo debería estar
+            currentTime := time.Now().UnixNano() / int64(time.Millisecond)
+            cycleDuration := int64(10) // Duración del ciclo en milisegundos
+            currentCycle := (currentTime / cycleDuration) % int64(queues)
+            globalVariable = int(currentCycle) + 1 // +1 para que comience en 1
+            lock.Unlock()
+        }
+    }
 }
 
 
