@@ -156,6 +156,17 @@ func detnet(packet []byte) []byte {
 		}
 		headers[slabel][iplen_offset_1-hOff] = packet[iplen_offset_1-pOff]
 		headers[slabel][iplen_offset_2-hOff] = packet[iplen_offset_2-pOff]
+		headers[slabel][udplen_offset_1-hOff] = packet[udplen_offset_1-pOff]
+		headers[slabel][udplen_offset_2-hOff] = packet[udplen_offset_2-pOff]
+		
+		headers[slabel][ipChkSm_offset_1-hOff] = 0x00
+		headers[slabel][ipChkSm_offset_2-hOff] = 0x00
+		chkSm := calculateChecksum(append( headers[slabel][L2_size-hOff:], packet[slabel_offset-pOff:]...))
+		bin_chkSm := make([]byte, 2)
+		binary.BigEndian.PutUint16(bin_chkSm, chkSm)
+		headers[slabel][ipChkSm_offset_1-hOff] = bin_chkSm[0]
+		headers[slabel][ipChkSm_offset_2-hOff] = bin_chkSm[1]
+		
 		return append(headers[slabel][:slabel_offset-hOff], packet[slabel_offset-pOff:]...)
 
 	case "pop":
