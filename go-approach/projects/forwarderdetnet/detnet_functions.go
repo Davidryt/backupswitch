@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	//"log"
+	"log"
 	"strconv"
 	"strings"
 )
@@ -52,8 +52,10 @@ type Service struct {
 }
 
 func L2_header(data L2_info) []byte {
-	a, _ := strconv.ParseInt(strconv.FormatInt(int64(data.Vid), 2)+
-		strconv.FormatInt(int64(data.Pcp), 2), 2, 16)
+	a, _ := strconv.ParseInt(strconv.FormatInt(int64(data.Pcp), 2) + strconv.FormatInt(int64(data.Vid), 2), 2, 16)
+	log.Printf("a: %d", a)
+	log.Printf("a1: %d", strconv.FormatInt(int64(data.Vid), 2))
+	log.Printf("a2: %d", strconv.FormatInt(int64(data.Pcp), 2))
 	src, _ := hex.DecodeString(data.Src)
 	dst, _ := hex.DecodeString(data.Dst)
 	b := make([]byte, 2)
@@ -270,6 +272,7 @@ func detnet_init(detnetConf_path string, newFlows_path string) bool {
 			var b [2]byte
 			c, _ := strconv.Atoi(k)
 			binary.BigEndian.PutUint16(b[:], uint16(c))
+			log.Printf("DETNET? %d ", L2_header(v.L2))
 			headers[[2]byte(b)] = append(L2_header(v.L2), append(L3_header(v.L3, v.L2.Pcp),
 				append(L4_header(v.L4), append(MPLS_slabel(uint16(c)), []byte{0, 0, 0, 0}...)...)...)...)
 		case "replicate":
