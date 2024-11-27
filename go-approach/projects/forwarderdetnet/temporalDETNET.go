@@ -74,6 +74,13 @@ func restartNetworkInterface(iface string) error {
 	}
 	time.Sleep(time.Duration(1) * time.Second)
 	log.Printf("Interface %s restarted", iface)
+	// Poner vlnas offload
+	vlanoffload := exec.Command("sudo","ethtool", "-K", iface, "rx-vlan-offload", "off", "tx-vlan-offload",  "off")
+	err = vlanoffload.Run()
+	if err != nil {
+		return fmt.Errorf("error al desactivar hardware offloading en la interfaz %s: %v", iface, err)
+	}
+	time.Sleep(time.Duration(1) * time.Second)	
 	return nil
 }
 

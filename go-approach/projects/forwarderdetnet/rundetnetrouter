@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Interfaz de red a monitorear con tcpdump
+IFACE="enp2s0"  # Cambia 'enp2s0' por tu interfaz de red
+
+# Ejecutar tcpdump en una sesión de tmux
+SESSION_NAME="tcpdump_session"
+tmux new-session -d -s "$SESSION_NAME" "sudo tcpdump -i $IFACE &>/dev/null"
+
+# Verifica que la sesión de tmux se haya creado correctamente
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    echo "iniciado el router detnet"
+else
+    echo "Error al iniciar detnet router"
+    exit 1
+fi
+
+# Ejecutar el script de Go en primer plano
+sudo go run detnet_functions.go temporalDETNET.go -queues 1 --verbose ifaces
+
+# Una vez terminado el script de Go, detener tcpdump
+#echo "Deteniendo tcpdump (tmux)..."
+tmux kill-session -t "$SESSION_NAME"
+
+echo "Script terminado."
+
